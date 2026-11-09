@@ -20,7 +20,7 @@ test('Semgrep scans staged source and maps only recognized results back to the u
     const staged = path.join(workspace, 'targets', '1.ts');
     assert.equal(await readFile(staged, 'utf8'), 'synthetic source fixture');
     const finding = {
-      check_id: 'sentry-js-sql-injection', path: staged, start: { line: 8, col: 11 },
+      check_id: 'srcaudit-js-sql-injection', path: staged, start: { line: 8, col: 11 },
       extra: { lines: 'synthetic-credential-that-must-not-be-exported' },
     };
     return { stdout: JSON.stringify({
@@ -56,7 +56,7 @@ test('Semgrep findings in other languages preserve location without exporting so
       const configs = args.flatMap((arg, index) => arg === '--config' ? [path.basename(args[index + 1])] : []);
       assert.deepEqual(configs, ['semgrep-js-ts.yml', 'semgrep-multilang.yml', 'semgrep-framework-config.yml']);
       return { stdout: JSON.stringify({
-        results: [{ check_id: 'sentry-php-command-injection', path: 'targets/1.php', start: { line: 1, col: 5 } }],
+        results: [{ check_id: 'srcaudit-php-command-injection', path: 'targets/1.php', start: { line: 1, col: 5 } }],
         errors: [], paths: { scanned: ['targets/1.php'] },
       }) };
     },
@@ -80,7 +80,7 @@ test('Semgrep stages configuration using synthetic paths and reports structural 
       assert.equal(await readFile(path.join(cwd, dockerPath), 'utf8'), 'FROM scratch');
       return { stdout: JSON.stringify({
         results: [{
-          check_id: 'sentry-github-actions-script-injection', path: workflowPath,
+          check_id: 'srcaudit-github-actions-script-injection', path: workflowPath,
           start: { line: 7, col: 11 }, end: { line: 9, col: 12 },
           extra: { lines: 'sensitive workflow data' },
         }],
@@ -128,7 +128,7 @@ test('deep findings locate the matched code and redact literal, comment and JSX 
   const result = await runSemgrep([{ file: 'src/route.tsx', text }], {
     run: async () => ({ stdout: JSON.stringify({
       results: [{
-        check_id: 'sentry-js-code-injection', path: 'targets/1.tsx', start: { line: 4, col: 15 },
+        check_id: 'srcaudit-js-code-injection', path: 'targets/1.tsx', start: { line: 4, col: 15 },
         extra: { lines: 'SECRET_ENGINE_STDOUT' },
       }],
       errors: [], paths: { scanned: ['targets/1.tsx'] },
@@ -164,7 +164,7 @@ test('a multiline Semgrep match keeps its start, end and masked lines in one fin
   const result = await runSemgrep([{ file: 'route.js', text }], {
     run: async () => ({ stdout: JSON.stringify({
       results: [{
-        check_id: 'sentry-js-sql-injection', path: 'targets/1.js',
+        check_id: 'srcaudit-js-sql-injection', path: 'targets/1.js',
         start: { line: 3, col: 5 }, end: { line: 4, col: 17 },
       }],
       errors: [], paths: { scanned: ['targets/1.js'] },

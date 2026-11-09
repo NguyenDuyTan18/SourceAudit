@@ -9,7 +9,7 @@ const output = path.join(root, 'data');
 await mkdir(output, { recursive: true });
 const sources = []; const errors = [];
 async function download(url, limit = 30000000) {
-  const response = await fetch(url, { headers: { 'User-Agent': 'SourceAuditPublicScenarioCollector/1.0', Accept: url.startsWith('https://api.github.com/') ? 'application/vnd.github+json' : '*/*' }, signal: AbortSignal.timeout(40000) });
+  const response = await fetch(url, { headers: { 'User-Agent': 'SrcAuditPublicScenarioCollector/1.0', Accept: url.startsWith('https://api.github.com/') ? 'application/vnd.github+json' : '*/*' }, signal: AbortSignal.timeout(40000) });
   if (!response.ok) throw new Error(`HTTP ${response.status} ${url}`);
   const chunks = []; let bytes = 0;
   for await (const chunk of response.body) { bytes += chunk.length; if (bytes > limit) throw new Error('Source exceeds collection limit'); chunks.push(chunk); }

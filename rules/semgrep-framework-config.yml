@@ -1,5 +1,5 @@
 rules:
-  - id: sentry-github-actions-script-injection
+  - id: srcaudit-github-actions-script-injection
     languages: [yaml]
     severity: ERROR
     message: Pass event data via a step environment variable and quote it when expanding it in the shell.
@@ -14,7 +14,7 @@ rules:
           metavariable: $SCRIPT
           regex: '(?s).*\$\{\{\s*github\.(?:head_ref|event\.(?:pull_request\.(?:title|body|head\.(?:ref|label))|issue\.(?:title|body)|comment\.body|head_commit\.message))\s*\}\}'
 
-  - id: sentry-dockerfile-root-user
+  - id: srcaudit-dockerfile-root-user
     languages: [dockerfile]
     severity: WARNING
     message: Set a non-root USER in the final stage and verify the runtime user.
@@ -24,7 +24,7 @@ rules:
           - pattern-regex: '(?m)^[ \t]*(?i:USER)[ \t]+(?:root|0)(?::[^\s]+)?[ \t]*\r?$(?![\s\S]*^[ \t]*(?i:FROM|USER)[ \t])'
       - pattern-regex: '(?m)^[ \t]*(?i:FROM)[ \t]+(?:--platform=\S+[ \t]+)?(?:scratch|(?:docker\.io/library/)?(?:alpine|busybox)(?::[a-zA-Z0-9_.-]+)?)(?:[ \t]+(?i:AS)[ \t]+\S+)?[ \t]*\r?$(?![\s\S]*^[ \t]*(?i:FROM|USER)[ \t])'
 
-  - id: sentry-node-jwt-literal-verification-key
+  - id: srcaudit-node-jwt-literal-verification-key
     languages: [javascript, typescript]
     severity: ERROR
     message: Load the HMAC key from a secret manager.
@@ -38,7 +38,7 @@ rules:
           regex: "^[\"']HS(?:256|384|512)[\"']$"
       - focus-metavariable: $KEY
 
-  - id: sentry-spring-jdbc-template-sql-injection
+  - id: srcaudit-spring-jdbc-template-sql-injection
     languages: [java]
     severity: ERROR
     message: Bind request values as query parameters in JdbcTemplate.
@@ -66,7 +66,7 @@ rules:
               - pattern: (org.springframework.jdbc.core.JdbcTemplate $DB).execute($SQL, ...)
           - focus-metavariable: $SQL
 
-  - id: sentry-laravel-raw-sql-injection
+  - id: srcaudit-laravel-raw-sql-injection
     languages: [php]
     severity: ERROR
     message: Bind request values separately from the raw SQL statement.
@@ -85,7 +85,7 @@ rules:
               - pattern: DB::unprepared($SQL, ...)
           - focus-metavariable: $SQL
 
-  - id: sentry-rails-http-ssrf
+  - id: srcaudit-rails-http-ssrf
     languages: [ruby]
     severity: ERROR
     message: Select the destination from a fixed set of service URLs.

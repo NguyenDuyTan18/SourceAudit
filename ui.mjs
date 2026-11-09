@@ -24,6 +24,6 @@ server.on('error', (error) => {
 server.on('listening', async () => {
   const url = `http://127.0.0.1:${server.address().port}`;
   await writeFile(path.join(root, '.ui-session.json'), JSON.stringify({ url, pid: process.pid, ...(publicAccess ? { publicUrl: new URL(publicAccess.origin).origin } : {}) }), { mode: 0o600 });
-  console.log(`SourceAudit UI: ${url}`);
+  console.log(`SrcAudit UI: ${url}`);
 });
 server.listen(8787, '127.0.0.1');

@@ -23,18 +23,18 @@ async function api(route, data) {
   try {
     response = await fetch(route, { method: data === undefined ? 'GET' : 'POST', headers: { 'X-Session-Token': token, ...(data === undefined ? {} : { 'Content-Type': 'application/json' }) }, ...(data === undefined ? {} : { body: JSON.stringify(data) }) });
   } catch {
-    throw new Error('Không kết nối được với SourceAudit. Kiểm tra ứng dụng đang chạy rồi tải lại trang.');
+    throw new Error('Không kết nối được với SrcAudit. Kiểm tra ứng dụng đang chạy rồi tải lại trang.');
   }
   const body = await response.json().catch(() => null);
   if (!response.ok) {
     const hints = {
       401: 'Phiên đăng nhập đã hết hạn. Hãy tải lại trang và đăng nhập.',
-      403: 'Phiên giao diện không hợp lệ. Hãy mở lại SourceAudit hoặc tải lại trang.',
+      403: 'Phiên giao diện không hợp lệ. Hãy mở lại SrcAudit hoặc tải lại trang.',
       413: 'Tệp gửi lên vượt giới hạn. Hãy giảm kích thước ZIP hoặc chọn thư mục nhỏ hơn.',
     };
-    throw new Error(hints[response.status] || body?.error || `SourceAudit không xử lý được yêu cầu (HTTP ${response.status}).`);
+    throw new Error(hints[response.status] || body?.error || `SrcAudit không xử lý được yêu cầu (HTTP ${response.status}).`);
   }
-  if (!body) throw new Error('SourceAudit trả về phản hồi không hợp lệ. Hãy tải lại trang.');
+  if (!body) throw new Error('SrcAudit trả về phản hồi không hợp lệ. Hãy tải lại trang.');
   return body;
 }
 function setBusy(value) {
@@ -416,7 +416,7 @@ $('#writeup-form').addEventListener('submit', async (event) => {
 api('/api/bootstrap').then((bootstrap) => {
   if (bootstrap.uploadSchema !== 1 || !Array.isArray(bootstrap.sourceExtensions)) {
     setScanReadiness('error', 'Cần khởi động lại');
-    message('Tiến trình SourceAudit đang chạy bản cũ. Mở lại Start-UI.cmd để nạp bản mới, rồi tải lại trang.');
+    message('Tiến trình SrcAudit đang chạy bản cũ. Mở lại Start-UI.cmd để nạp bản mới, rồi tải lại trang.');
     return;
   }
   for (const extension of bootstrap.sourceExtensions) sourceExtensions.add(extension);

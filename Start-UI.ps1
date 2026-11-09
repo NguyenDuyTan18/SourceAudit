@@ -28,18 +28,18 @@ if ($taskActiveSession) {
     if (Test-Path -LiteralPath $taskPublicFile) { $taskBackendFiles += Get-Item -LiteralPath $taskPublicFile }
     $taskLatestBackend = ($taskBackendFiles | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1).LastWriteTimeUtc
     $taskActiveProcess = Get-Process -Id ([int]$taskActiveSession.pid) -ErrorAction SilentlyContinue
-    if (-not $taskActiveProcess -or $taskActiveProcess.ProcessName -ne 'node') { throw 'Khong xac dinh duoc tien trinh SourceAudit. Hay dong ban dang chay roi mo lai.' }
+    if (-not $taskActiveProcess -or $taskActiveProcess.ProcessName -ne 'node') { throw 'Khong xac dinh duoc tien trinh SrcAudit. Hay dong ban dang chay roi mo lai.' }
     if ($taskLatestBackend -gt $taskActiveProcess.StartTime.ToUniversalTime()) {
         $taskListener = [regex]::Escape(([uri]$taskActiveSession.url).Authority)
         $taskListenerPattern = '^\s*TCP\s+' + $taskListener + '\s+0\.0\.0\.0:0\s+\S+\s+' + $taskActiveProcess.Id + '\s*$'
         $taskOwnsListener = netstat.exe -ano -p tcp | Select-String -Pattern $taskListenerPattern -Quiet
         if (-not $taskOwnsListener -or (Get-Item -LiteralPath $taskSessionFile).LastWriteTimeUtc -lt $taskActiveProcess.StartTime.ToUniversalTime()) {
-            throw 'Khong xac minh duoc tien trinh SourceAudit cu. Hay dong ban dang chay roi mo lai.'
+            throw 'Khong xac minh duoc tien trinh SrcAudit cu. Hay dong ban dang chay roi mo lai.'
         }
-        Write-Host 'Dang khoi dong lai SourceAudit de nap ban moi...'
+        Write-Host 'Dang khoi dong lai SrcAudit de nap ban moi...'
         Stop-Process -InputObject $taskActiveProcess
         $taskActiveProcess.WaitForExit(5000) | Out-Null
-        if (-not $taskActiveProcess.HasExited) { throw 'Khong dung duoc tien trinh SourceAudit cu.' }
+        if (-not $taskActiveProcess.HasExited) { throw 'Khong dung duoc tien trinh SrcAudit cu.' }
         $taskActiveSession = $null
     }
 }

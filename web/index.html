@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="session-token" content="__SESSION_TOKEN__">
-  <title>SourceAudit — Kiểm tra bảo mật</title>
+  <title>SrcAudit — Kiểm tra bảo mật</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%2365e2c2'/%3E%3Cpath d='M9 8h14v8c0 5-7 9-7 9s-7-4-7-9z' fill='%230b141c'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/style.css">
   <script src="/app.js" defer></script>
 </head>
 <body>
 <aside class="sidebar">
-  <a class="brand" href="/" aria-label="SourceAudit, trang chủ"><span class="brand-icon">S</span><span>SourceAudit<small>SECURITY WORKSPACE</small></span></a>
+  <a class="brand" href="/" aria-label="SrcAudit, trang chủ"><span class="brand-icon">S</span><span>SrcAudit<small>SECURITY WORKSPACE</small></span></a>
   <p class="nav-label">KHÔNG GIAN LÀM VIỆC</p>
   <nav aria-label="Điều hướng chính">
     <button class="nav-item active" data-view="scan"><span aria-hidden="true">◎</span> Kiểm tra bảo mật</button>
@@ -35,7 +35,7 @@
     <section id="view-scan" class="view">
       <div class="scan-hero">
         <div>
-          <p class="eyebrow">SOURCEAUDIT / PHÂN TÍCH TĨNH</p>
+          <p class="eyebrow">SRCAUDIT / PHÂN TÍCH TĨNH</p>
           <h1>Kiểm tra mã nguồn<span class="accent">.</span></h1>
           <p>Tìm điểm yếu, xem đúng dòng mã và chọn cách sửa phù hợp.</p>
         </div>
@@ -101,7 +101,7 @@
     <section id="view-writeups" class="view" hidden><div class="page-heading"><div><p class="eyebrow">TÀI LIỆU THAM KHẢO</p><h1>Nhập write-up<span class="accent">.</span></h1><p>Liên kết ghi chú và tài liệu với phát hiện có cùng chủ đề.</p></div></div><section class="panel writeup-panel"><form id="writeup-form"><label for="writeup-file" class="upload-box"><span class="upload-icon" aria-hidden="true">↑</span><strong>Chọn ghi chú TXT hoặc Markdown</strong><span>Tối đa 1 MiB · Nội dung được xử lý trên máy</span><input id="writeup-file" type="file" accept=".txt,.md"></label><label for="writeup-text">Hoặc dán nội dung hay URL có tên chủ đề</label><textarea id="writeup-text" rows="12" placeholder="Ví dụ: SQL injection khi đầu vào được ghép trực tiếp vào truy vấn…"></textarea><div class="form-bottom"><span class="subtle">Chỉ lưu nhóm chủ đề và URL tham khảo.</span><button id="writeup-button" class="button primary" type="submit">Nhập kiến thức →</button></div></form><div id="writeup-result" class="message" role="status" hidden></div></section><p class="result-footnote">Khi URL tham khảo không ghi rõ chủ đề, hãy dán phần mô tả của write-up.</p></section>
     <section id="view-history" class="view" hidden><div class="page-heading"><div><p class="eyebrow">CÁC LẦN KIỂM TRA CỦA BẠN</p><h1>Phiên kiểm tra<span class="accent">.</span></h1><p>Chỉ tài khoản của bạn thấy các lần kiểm tra này. Giữ tối đa 20 lần gần nhất; báo cáo tự xóa khi quá thời hạn lưu giữ.</p></div><button id="refresh-history" class="button secondary">Làm mới ↻</button></div><div id="history-list" class="history-list"></div></section>
     <section id="view-users" class="view" hidden><div class="page-heading"><div><p class="eyebrow">QUẢN TRỊ</p><h1>Tài khoản<span class="accent">.</span></h1><p>Mỗi tài khoản chỉ thấy lần kiểm tra và báo cáo của chính mình. Xóa tài khoản sẽ xóa luôn báo cáo của tài khoản đó.</p></div></div><section class="panel writeup-panel"><form id="user-form"><label for="new-username">Tên đăng nhập</label><input id="new-username" autocomplete="off" minlength="3" maxlength="64" pattern="[A-Za-z0-9_.-]{3,64}" required><label for="new-password">Mật khẩu (ít nhất 15 ký tự)</label><input id="new-password" type="password" autocomplete="new-password" minlength="15" maxlength="256" required><div class="form-bottom"><span class="subtle">Gửi mật khẩu cho người dùng qua kênh riêng.</span><button id="user-button" class="button primary" type="submit">Tạo tài khoản →</button></div></form><div id="user-result" class="message" role="status" hidden></div></section><div id="user-list" class="history-list"></div></section>
-    <footer class="footer"><span>SourceAudit / Local Security Workspace</span><span>Chỉ kiểm tra hệ thống bạn sở hữu hoặc được phép kiểm thử.</span></footer>
+    <footer class="footer"><span>SrcAudit / Local Security Workspace</span><span>Chỉ kiểm tra hệ thống bạn sở hữu hoặc được phép kiểm thử.</span></footer>
   </div>
 </main>
 </body>

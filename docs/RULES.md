@@ -1,4 +1,4 @@
-# Danh mục quy tắc SourceAudit
+# Danh mục quy tắc SrcAudit
 
 Tài liệu này liệt kê chi tiết các quy tắc của hai chế độ phân tích. Xem [README](../README.md) để cài đặt và sử dụng.
 
@@ -15,14 +15,14 @@ Tài liệu này liệt kê chi tiết các quy tắc của hai chế độ phâ
 4. **Đổi kết quả engine thành phát hiện.** Ứng dụng nhận các ID rule đã đăng ký, đối chiếu với file được engine ghi nhận đã quét, loại kết quả trùng và khôi phục `file:dòng:cột`. Bảng metadata theo ID cung cấp tiêu đề, CWE, mức độ và hướng sửa. Số file do ứng dụng chọn và số file Semgrep đã quét được thống kê riêng theo ngôn ngữ. [Bộ chuyển đổi kết quả](../src/semgrep.mjs)
 5. **Gắn tài liệu kiểm chứng và xuất báo cáo.** Sau khi có phát hiện, UI và CLI bổ sung ngữ cảnh theo CWE, ví dụ mô tả điểm yếu, liên kết OWASP và write-up đã nhập có chủ đề phù hợp. Kết quả được xuất ra JSON, HTML và TXT. [Bổ sung ngữ cảnh](../src/knowledge.mjs) · [Xuất báo cáo](../src/report.mjs)
 
-Ví dụ, quy tắc `sentry-python-requests-ssrf` theo dõi `request.args["url"]` qua biến `target` đến đối số URL của `requests.get(target)`. Phát hiện CWE-918 trỏ vào `target`. Bản đối chứng dùng URL cố định và đưa dữ liệu từ request vào `params=` để kiểm tra quy tắc chỉ đánh dấu đích gửi yêu cầu. [Cặp mã mẫu](../scripts/semgrep-multilang-cases.mjs) · [Tài liệu Requests](https://docs.python-requests.org/en/latest/api/)
+Ví dụ, quy tắc `srcaudit-python-requests-ssrf` theo dõi `request.args["url"]` qua biến `target` đến đối số URL của `requests.get(target)`. Phát hiện CWE-918 trỏ vào `target`. Bản đối chứng dùng URL cố định và đưa dữ liệu từ request vào `params=` để kiểm tra quy tắc chỉ đánh dấu đích gửi yêu cầu. [Cặp mã mẫu](../scripts/semgrep-multilang-cases.mjs) · [Tài liệu Requests](https://docs.python-requests.org/en/latest/api/)
 
 ### Quy tắc lấy từ đâu?
 
 | Thành phần | Nguồn và vai trò |
 |---|---|
-| Quy tắc Semgrep | SourceAudit tự viết các rule YAML dựa trên tài liệu chính thức của từng API và dùng CWE để phân loại. [JS/TS](../rules/semgrep-js-ts.yml) · [Đa ngôn ngữ](../rules/semgrep-multilang.yml) · [Framework và cấu hình](../rules/semgrep-framework-config.yml) · [Danh mục CWE](https://cwe.mitre.org/) |
-| Metadata của phát hiện | ID `sentry-…` trong YAML được ánh xạ sang tiêu đề tiếng Việt, CWE, mức độ và cách sửa. Liên kết CWE trong báo cáo được dựng từ mã này. [Bảng metadata](../src/semgrep.mjs) |
+| Quy tắc Semgrep | SrcAudit tự viết các rule YAML dựa trên tài liệu chính thức của từng API và dùng CWE để phân loại. [JS/TS](../rules/semgrep-js-ts.yml) · [Đa ngôn ngữ](../rules/semgrep-multilang.yml) · [Framework và cấu hình](../rules/semgrep-framework-config.yml) · [Danh mục CWE](https://cwe.mitre.org/) |
+| Metadata của phát hiện | ID `srcaudit-…` trong YAML được ánh xạ sang tiêu đề tiếng Việt, CWE, mức độ và cách sửa. Liên kết CWE trong báo cáo được dựng từ mã này. [Bảng metadata](../src/semgrep.mjs) |
 | Quy tắc quét nhanh | Các mẫu chữ ký, quy tắc theo kịch bản và phân tích luồng văn bản nằm trong mã nguồn dự án. Quét nhanh đối chiếu dependency npm hoặc pip với snapshot advisory. CLI có tùy chọn bổ sung rule JSON. [Quét nhanh](../src/source.mjs) · [Chữ ký mở rộng](../src/extended-rules.mjs) · [Quy tắc theo kịch bản](../src/scenario-rules.mjs) · [Luồng văn bản](../src/flow.mjs) |
 | Dữ liệu tra cứu và write-up | CWE, OWASP WSTG, ASVS, API Security, GitHub Advisory Database và CISA KEV được ghi nguồn trong manifest của kho dữ liệu. Write-up nhập qua ứng dụng cung cấp chủ đề và URL liên quan cho báo cáo. Ở chế độ quét sâu, YAML quyết định cách phát hiện và dữ liệu tra cứu bổ sung ngữ cảnh sau đó. [Nguồn và giấy phép](../data/README.md) · [Manifest gốc](../data/manifest.json) · [Manifest mở rộng](../data/extensions-manifest.json) |
 

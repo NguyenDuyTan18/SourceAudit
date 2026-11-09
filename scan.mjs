@@ -5,7 +5,7 @@ import { renderText, writeReports, SEVERITIES } from './src/report.mjs';
 import { pruneReports, resolveRetentionMs } from './src/report-retention.mjs';
 import { searchKnowledge, importWriteup, loadCustomRules, loadWriteups, enrichReport } from './src/knowledge.mjs';
 
-const HELP = `SourceAudit — Phân tích tĩnh mã nguồn (Node.js >= 22).
+const HELP = `SrcAudit — Phân tích tĩnh mã nguồn (Node.js >= 22).
 
 Quét và xuất report.txt, report.json, report.html:
   node scan.mjs --src "D:\\path\\to\\source" --out ./reports/run-2
@@ -25,7 +25,7 @@ Tùy chọn:
   --fail-on LEVEL    Exit 1 khi có severity >= critical/high/medium/low/info
   --out DIR          Thư mục báo cáo (mặc định .scanner-reports/<timestamp>)
 
-Báo cáo trong .scanner-reports/ cũ hơn SENTRY_REPORT_RETENTION_DAYS ngày
+Báo cáo trong .scanner-reports/ cũ hơn SRCAUDIT_REPORT_RETENTION_DAYS ngày
 (mặc định 7, đặt 0 để tắt) được tự xóa khi dùng thư mục mặc định.
   --help             Hướng dẫn
 

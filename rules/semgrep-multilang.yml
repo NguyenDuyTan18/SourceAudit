@@ -1,5 +1,5 @@
 rules:
-  - id: sentry-python-sql-injection
+  - id: srcaudit-python-sql-injection
     languages: [python]
     mode: taint
     severity: ERROR
@@ -28,7 +28,7 @@ rules:
               metavariable: $DB
               regex: '^(cur|cursor|conn|connection|db)$'
           - focus-metavariable: $SQL
-  - id: sentry-python-command-injection
+  - id: srcaudit-python-command-injection
     languages: [python]
     mode: taint
     severity: ERROR
@@ -44,7 +44,7 @@ rules:
               - pattern: subprocess.call($CMD, ..., shell=True, ...)
               - pattern: subprocess.check_output($CMD, ..., shell=True, ...)
           - focus-metavariable: $CMD
-  - id: sentry-python-unsafe-deserialization
+  - id: srcaudit-python-unsafe-deserialization
     languages: [python]
     mode: taint
     severity: ERROR
@@ -58,7 +58,7 @@ rules:
               - pattern: yaml.unsafe_load($DATA, ...)
           - focus-metavariable: $DATA
 
-  - id: sentry-php-sql-injection
+  - id: srcaudit-php-sql-injection
     languages: [php]
     mode: taint
     severity: ERROR
@@ -78,7 +78,7 @@ rules:
               - pattern: $DB->prepare($SQL, ...)
               - pattern: mysqli_query($DB, $SQL, ...)
           - focus-metavariable: $SQL
-  - id: sentry-php-command-injection
+  - id: srcaudit-php-command-injection
     languages: [php]
     mode: taint
     severity: ERROR
@@ -93,7 +93,7 @@ rules:
               - pattern: passthru($CMD, ...)
               - pattern: popen($CMD, ...)
           - focus-metavariable: $CMD
-  - id: sentry-php-file-inclusion
+  - id: srcaudit-php-file-inclusion
     languages: [php]
     mode: taint
     severity: ERROR
@@ -108,7 +108,7 @@ rules:
               - pattern: require_once $FILE;
           - focus-metavariable: $FILE
 
-  - id: sentry-java-sql-injection
+  - id: srcaudit-java-sql-injection
     languages: [java]
     mode: taint
     severity: ERROR
@@ -137,7 +137,7 @@ rules:
               metavariable: $ST
               regex: '^(st|stmt|statement|conn|connection)$'
           - focus-metavariable: $SQL
-  - id: sentry-java-command-injection
+  - id: srcaudit-java-command-injection
     languages: [java]
     mode: taint
     severity: ERROR
@@ -150,7 +150,7 @@ rules:
               - pattern: new ProcessBuilder("sh", "-c", $CMD, ...)
               - pattern: new ProcessBuilder("bash", "-c", $CMD, ...)
           - focus-metavariable: $CMD
-  - id: sentry-java-unsafe-deserialization
+  - id: srcaudit-java-unsafe-deserialization
     languages: [java]
     mode: taint
     severity: ERROR
@@ -161,7 +161,7 @@ rules:
           - pattern: new ObjectInputStream($DATA)
           - focus-metavariable: $DATA
 
-  - id: sentry-go-sql-injection
+  - id: srcaudit-go-sql-injection
     languages: [go]
     mode: taint
     severity: ERROR
@@ -191,7 +191,7 @@ rules:
               metavariable: $DB
               regex: '^(db|tx|conn)$'
           - focus-metavariable: $SQL
-  - id: sentry-go-command-injection
+  - id: srcaudit-go-command-injection
     languages: [go]
     mode: taint
     severity: ERROR
@@ -210,7 +210,7 @@ rules:
               - pattern: exec.CommandContext($CTX, "sh", "-c", $CMD, ...)
               - pattern: exec.CommandContext($CTX, "bash", "-c", $CMD, ...)
           - focus-metavariable: $CMD
-  - id: sentry-go-ssrf
+  - id: srcaudit-go-ssrf
     languages: [go]
     mode: taint
     severity: WARNING
@@ -226,7 +226,7 @@ rules:
               - pattern: http.NewRequestWithContext($CTX, $METHOD, $URL, ...)
           - focus-metavariable: $URL
 
-  - id: sentry-csharp-sql-injection
+  - id: srcaudit-csharp-sql-injection
     languages: [csharp]
     mode: taint
     severity: ERROR
@@ -245,7 +245,7 @@ rules:
               - pattern: new SqlCommand($SQL, ...)
               - pattern: $SET.FromSqlRaw($SQL, ...)
           - focus-metavariable: $SQL
-  - id: sentry-csharp-path-traversal
+  - id: srcaudit-csharp-path-traversal
     languages: [csharp]
     mode: taint
     severity: ERROR
@@ -258,7 +258,7 @@ rules:
               - pattern: File.ReadAllBytes($FILE, ...)
               - pattern: File.OpenRead($FILE)
           - focus-metavariable: $FILE
-  - id: sentry-csharp-open-redirect
+  - id: srcaudit-csharp-open-redirect
     languages: [csharp]
     mode: taint
     severity: WARNING
@@ -271,7 +271,7 @@ rules:
               - pattern: RedirectPermanent($URL)
           - focus-metavariable: $URL
 
-  - id: sentry-python-ldap-injection
+  - id: srcaudit-python-ldap-injection
     languages: [python]
     mode: taint
     severity: ERROR
@@ -302,7 +302,7 @@ rules:
               regex: '^(ldap|ldap_conn|ldap_connection)$'
           - focus-metavariable: $FILTER
 
-  - id: sentry-php-unsafe-deserialization
+  - id: srcaudit-php-unsafe-deserialization
     languages: [php]
     mode: taint
     severity: ERROR
@@ -315,7 +315,7 @@ rules:
               - pattern: \unserialize($DATA, ...)
           - focus-metavariable: $DATA
 
-  - id: sentry-java-xpath-injection
+  - id: srcaudit-java-xpath-injection
     languages: [java]
     mode: taint
     severity: ERROR
@@ -329,7 +329,7 @@ rules:
               - pattern: (javax.xml.xpath.XPath $XP).compile($QUERY)
           - focus-metavariable: $QUERY
 
-  - id: sentry-go-log-injection
+  - id: srcaudit-go-log-injection
     languages: [go]
     mode: taint
     severity: WARNING
@@ -346,7 +346,7 @@ rules:
               - pattern: log.Printf($MESSAGE, ...)
           - focus-metavariable: $MESSAGE
 
-  - id: sentry-csharp-ssrf
+  - id: srcaudit-csharp-ssrf
     languages: [csharp]
     mode: taint
     severity: WARNING
@@ -367,7 +367,7 @@ rules:
               regex: '^(?:this\.)?(?:_?httpClient|client)$'
           - focus-metavariable: $URL
 
-  - id: sentry-python-flask-ssti
+  - id: srcaudit-python-flask-ssti
     languages: [python]
     mode: taint
     severity: ERROR
@@ -380,7 +380,7 @@ rules:
               - pattern: flask.render_template_string(..., source=$TEMPLATE, ...)
           - focus-metavariable: $TEMPLATE
 
-  - id: sentry-php-curl-ssrf
+  - id: srcaudit-php-curl-ssrf
     languages: [php]
     mode: taint
     severity: WARNING
@@ -393,7 +393,7 @@ rules:
               - pattern: curl_setopt($HANDLE, CURLOPT_URL, $URL)
           - focus-metavariable: $URL
 
-  - id: sentry-go-path-traversal
+  - id: srcaudit-go-path-traversal
     languages: [go]
     mode: taint
     severity: ERROR
@@ -406,7 +406,7 @@ rules:
               - pattern: os.Open($PATH)
           - focus-metavariable: $PATH
 
-  - id: sentry-csharp-command-injection
+  - id: srcaudit-csharp-command-injection
     languages: [csharp]
     mode: taint
     severity: ERROR
@@ -422,7 +422,7 @@ rules:
               - pattern: new System.Diagnostics.ProcessStartInfo { ..., FileName = $PROGRAM, ... }
           - focus-metavariable: $PROGRAM
 
-  - id: sentry-python-requests-ssrf
+  - id: srcaudit-python-requests-ssrf
     languages: [python]
     mode: taint
     severity: WARNING
@@ -439,7 +439,7 @@ rules:
               - pattern: requests.request(..., url=$URL, ...)
           - focus-metavariable: $URL
 
-  - id: sentry-php-open-redirect
+  - id: srcaudit-php-open-redirect
     languages: [php]
     mode: taint
     severity: WARNING
@@ -452,7 +452,7 @@ rules:
               - pattern: 'header("Location:" . $URL, ...)'
           - focus-metavariable: $URL
 
-  - id: sentry-java-outbound-ssrf
+  - id: srcaudit-java-outbound-ssrf
     languages: [java]
     mode: taint
     severity: WARNING

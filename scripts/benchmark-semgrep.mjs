@@ -418,7 +418,7 @@ try {
     assert.ok(collected.findings.some((finding) => finding.location.file === file && finding.cwe === cwe), file + ' ' + cwe);
   }
   const evaluated = collected.findings.find((finding) =>
-    finding.location.file === 'demo-src/app.js' && finding.ruleId === 'sentry-js-code-injection');
+    finding.location.file === 'demo-src/app.js' && finding.ruleId === 'srcaudit-js-code-injection');
   assert.match(evaluated.sourceExcerpt, /> \d+ \|.*eval\(req\.query\.code\)/);
   assert.doesNotMatch(evaluated.sourceExcerpt, /DEMO-ONLY-NOT-A-REAL-CREDENTIAL/);
   console.log(JSON.stringify({ collectedFilesScanned: collected.stats.sourceAnalysis.scanned, expectedMatches: expected }));

@@ -1,5 +1,5 @@
 rules:
-  - id: sentry-js-sql-injection
+  - id: srcaudit-js-sql-injection
     languages: [javascript, typescript]
     mode: taint
     severity: ERROR
@@ -82,7 +82,7 @@ rules:
               metavariable: $DB
               regex: '(?i)^(db|pool|client|conn|connection|sequelize|knex|trx|tx)$'
           - focus-metavariable: $SQL
-  - id: sentry-js-command-injection
+  - id: srcaudit-js-command-injection
     languages: [javascript, typescript]
     mode: taint
     severity: ERROR
@@ -143,7 +143,7 @@ rules:
           - focus-metavariable:
               - $COMMAND
               - $ARGS
-  - id: sentry-js-ssrf
+  - id: srcaudit-js-ssrf
     languages: [javascript, typescript]
     mode: taint
     severity: WARNING
@@ -165,7 +165,7 @@ rules:
               - pattern: axios({..., url:$URL, ...}, ...)
               - pattern: axios.request({..., url:$URL, ...}, ...)
           - focus-metavariable: $URL
-  - id: sentry-express-path-traversal
+  - id: srcaudit-express-path-traversal
     languages: [javascript, typescript]
     mode: taint
     severity: ERROR
@@ -216,7 +216,7 @@ rules:
               metavariable: $RES
               regex: '^(res|response)$'
           - focus-metavariable: $ROOT
-  - id: sentry-js-xss
+  - id: srcaudit-js-xss
     languages: [javascript, typescript]
     mode: taint
     severity: ERROR
@@ -261,7 +261,7 @@ rules:
               - pattern: $NODE.outerHTML = $HTML
               - pattern: $NODE.insertAdjacentHTML($POSITION, $HTML)
           - focus-metavariable: $HTML
-  - id: sentry-express-open-redirect
+  - id: srcaudit-express-open-redirect
     languages: [javascript, typescript]
     mode: taint
     severity: WARNING
@@ -276,7 +276,7 @@ rules:
               metavariable: $RES
               regex: '^(res|response)$'
           - focus-metavariable: $URL
-  - id: sentry-js-nosql-injection
+  - id: srcaudit-js-nosql-injection
     languages: [javascript, typescript]
     mode: taint
     severity: ERROR
@@ -313,7 +313,7 @@ rules:
                       regex: *nosql-filter-methods
               - pattern: $MODEL.aggregate($FILTER, ...)
           - focus-metavariable: $FILTER
-  - id: sentry-js-prototype-pollution
+  - id: srcaudit-js-prototype-pollution
     languages: [javascript, typescript]
     mode: taint
     severity: WARNING
@@ -336,7 +336,7 @@ rules:
               - pattern: _.setWith($TARGET, $KEY, ...)
               - pattern: lodash.setWith($TARGET, $KEY, ...)
           - focus-metavariable: $KEY
-  - id: sentry-js-template-injection
+  - id: srcaudit-js-template-injection
     languages: [javascript, typescript]
     mode: taint
     severity: ERROR
@@ -353,7 +353,7 @@ rules:
               - pattern: Handlebars.compile($TEMPLATE, ...)
               - pattern: nunjucks.renderString($TEMPLATE, ...)
           - focus-metavariable: $TEMPLATE
-  - id: sentry-js-code-injection
+  - id: srcaudit-js-code-injection
     languages: [javascript, typescript]
     mode: taint
     severity: ERROR
@@ -370,7 +370,7 @@ rules:
               - pattern: vm.runInNewContext($CODE, ...)
               - pattern: new vm.Script($CODE, ...)
           - focus-metavariable: $CODE
-  - id: sentry-js-unsafe-deserialization
+  - id: srcaudit-js-unsafe-deserialization
     languages: [javascript, typescript]
     mode: taint
     severity: ERROR
@@ -400,7 +400,7 @@ rules:
                   ...
           - pattern: $LOAD($DATA, ...)
           - focus-metavariable: $DATA
-  - id: sentry-js-mass-assignment
+  - id: srcaudit-js-mass-assignment
     languages: [javascript, typescript]
     mode: taint
     severity: WARNING
@@ -448,7 +448,7 @@ rules:
               regex: '^[A-Z][A-Za-z0-9_$]*$'
           - focus-metavariable: $DATA
 
-  - id: sentry-js-untrusted-module
+  - id: srcaudit-js-untrusted-module
     languages: [javascript, typescript]
     mode: taint
     severity: ERROR
@@ -461,7 +461,7 @@ rules:
               - pattern: import($MODULE)
           - focus-metavariable: $MODULE
 
-  - id: sentry-js-file-write-path-traversal
+  - id: srcaudit-js-file-write-path-traversal
     languages: [javascript, typescript]
     mode: taint
     severity: ERROR

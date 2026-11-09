@@ -5,7 +5,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const DEFAULT_RETENTION_DAYS = 7;
 export const MAX_RETENTION_DAYS = 365;
 
-// Only directories created by SourceAudit itself are eligible for deletion:
+// Only directories created by SrcAudit itself are eligible for deletion:
 // UI jobs use a UUID, CLI default runs use an ISO timestamp with ':' and '.' replaced.
 const MANAGED_NAME = /^(?:[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}|\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z)$/;
 
@@ -22,13 +22,13 @@ export function isUserReportFolder(name) {
 
 /**
  * Resolve the retention period in milliseconds.
- * `SENTRY_REPORT_RETENTION_DAYS=0` disables automatic deletion.
+ * `SRCAUDIT_REPORT_RETENTION_DAYS=0` disables automatic deletion.
  */
-export function resolveRetentionMs(value = process.env.SENTRY_REPORT_RETENTION_DAYS) {
+export function resolveRetentionMs(value = process.env.SRCAUDIT_REPORT_RETENTION_DAYS) {
   if (value === undefined || value === '') return DEFAULT_RETENTION_DAYS * DAY_MS;
   const days = Number(value);
   if (!Number.isFinite(days) || days < 0 || days > MAX_RETENTION_DAYS) {
-    throw new Error(`SENTRY_REPORT_RETENTION_DAYS phải là số từ 0 đến ${MAX_RETENTION_DAYS}.`);
+    throw new Error(`SRCAUDIT_REPORT_RETENTION_DAYS phải là số từ 0 đến ${MAX_RETENTION_DAYS}.`);
   }
   return days * DAY_MS;
 }
@@ -36,7 +36,7 @@ export function resolveRetentionMs(value = process.env.SENTRY_REPORT_RETENTION_D
 /**
  * Delete report directories under `reportsDir` (and one level inside each `user-*` folder)
  * older than `maxAgeMs`.
- * Symlinks, files and directories with names SourceAudit did not create are left untouched.
+ * Symlinks, files and directories with names SrcAudit did not create are left untouched.
  * Returns the names of removed directories.
  */
 export async function pruneReports(reportsDir, { maxAgeMs, now = Date.now() } = {}) {

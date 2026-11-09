@@ -11,7 +11,7 @@ const output = path.join(root, 'data');
 await mkdir(output, { recursive: true });
 const sources = []; const errors = []; const advisories = new Map();
 async function download(url, maxBytes = 30000000) {
-  const response = await fetch(url, { headers: { 'User-Agent': 'SourceAudit-Local-Knowledge-Builder/1.0', Accept: url.includes('api.github') ? 'application/vnd.github+json' : '*/*' }, signal: AbortSignal.timeout(45000) });
+  const response = await fetch(url, { headers: { 'User-Agent': 'SrcAudit-Local-Knowledge-Builder/1.0', Accept: url.includes('api.github') ? 'application/vnd.github+json' : '*/*' }, signal: AbortSignal.timeout(45000) });
   if (!response.ok) throw new Error(`HTTP ${response.status} ${url}`);
   const chunks = []; let size = 0;
   for await (const chunk of response.body) { size += chunk.length; if (size > maxBytes) throw new Error('Download limit'); chunks.push(chunk); }

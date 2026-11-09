@@ -22,7 +22,7 @@ lỗ hổng sẽ được công bố kèm ghi nhận người báo cáo (nếu b
 
 ## Phạm vi
 
-Trong phạm vi: lỗ hổng của chính Sentry, ví dụ vượt qua xác thực, truy cập báo cáo
+Trong phạm vi: lỗ hổng của chính SrcAudit, ví dụ vượt qua xác thực, truy cập báo cáo
 của tài khoản khác, path traversal khi giải nén, thực thi mã khi quét, lộ dữ liệu
 trong báo cáo.
 
@@ -31,4 +31,4 @@ các tệp mẫu cố ý chứa lỗi trong `examples/`, `test/` và `scripts/`.
 
 ## Sử dụng hợp pháp
 
-Chỉ dùng Sentry trên mã nguồn bạn sở hữu hoặc được phép kiểm tra.
+Chỉ dùng SrcAudit trên mã nguồn bạn sở hữu hoặc được phép kiểm tra.

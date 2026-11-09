@@ -33,7 +33,7 @@ test('resolveRetentionMs uses 7 days by default and validates input', () => {
   for (const bad of ['-1', 'abc', '366']) assert.throws(() => resolveRetentionMs(bad));
 });
 
-test('only SourceAudit-created report names are managed', () => {
+test('only SrcAudit-created report names are managed', () => {
   assert.ok(isManagedReportName(OLD_UUID));
   assert.ok(isManagedReportName(OLD_CLI));
   for (const name of ['sample', '..', 'node_modules', `${OLD_UUID}x`]) assert.ok(!isManagedReportName(name));

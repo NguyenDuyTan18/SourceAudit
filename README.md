@@ -1,4 +1,4 @@
-# SourceAudit
+# SrcAudit
 
 > Công cụ phân tích tĩnh mã nguồn (SAST) chạy cục bộ, xuất báo cáo có vị trí, bằng chứng và hướng khắc phục.
 
@@ -26,7 +26,7 @@
 
 ## Giới thiệu
 
-SourceAudit quét mã nguồn để tìm điểm yếu bảo mật theo CWE, đối chiếu dependency với advisory đã biết và bổ sung ngữ cảnh từ OWASP, MITRE CWE, GitHub Advisory Database và CISA KEV. Toàn bộ quá trình chạy offline trên máy của bạn.
+SrcAudit quét mã nguồn để tìm điểm yếu bảo mật theo CWE, đối chiếu dependency với advisory đã biết và bổ sung ngữ cảnh từ OWASP, MITRE CWE, GitHub Advisory Database và CISA KEV. Toàn bộ quá trình chạy offline trên máy của bạn.
 
 Có hai cách dùng:
 
@@ -66,7 +66,7 @@ py -m venv .scanner-tools/semgrep
 .\.scanner-tools\semgrep\Scripts\python.exe -m pip install semgrep==1.184.0
 ```
 
-SourceAudit tìm Semgrep theo thứ tự: biến môi trường `SECURITYSCANNER_SEMGREP_EXE` → `.scanner-tools/semgrep` → `semgrep` trên `PATH`. Xem thêm [tài liệu cài Semgrep CE](https://semgrep.dev/docs/getting-started/quickstart-ce).
+SrcAudit tìm Semgrep theo thứ tự: biến môi trường `SECURITYSCANNER_SEMGREP_EXE` → `.scanner-tools/semgrep` → `semgrep` trên `PATH`. Xem thêm [tài liệu cài Semgrep CE](https://semgrep.dev/docs/getting-started/quickstart-ce).
 
 ## Sử dụng
 
@@ -87,10 +87,10 @@ Trên Windows có thể nhấp đúp `Start-UI.cmd`.
 Để thử nhanh, chọn thư mục `examples/demo-src`, hoặc tạo ZIP mẫu:
 
 ```powershell
-Compress-Archive -Path .\examples\demo-src\* -DestinationPath .\sourceaudit-demo.zip -Force
+Compress-Archive -Path .\examples\demo-src\* -DestinationPath .\srcaudit-demo.zip -Force
 ```
 
-> Nếu giao diện báo **Cần khởi động lại**, chạy lại `Start-UI.cmd`. Launcher xác minh tiến trình SourceAudit đang giữ cổng trước khi thay thế.
+> Nếu giao diện báo **Cần khởi động lại**, chạy lại `Start-UI.cmd`. Launcher xác minh tiến trình SrcAudit đang giữ cổng trước khi thay thế.
 
 ### CLI
 
@@ -173,13 +173,13 @@ Báo cáo không được giữ vô thời hạn. Thư mục báo cáo trong `.s
 
 | Biến môi trường | Mặc định | Ý nghĩa |
 |---|---|---|
-| `SENTRY_REPORT_RETENTION_DAYS` | `7` | Số ngày giữ báo cáo (0–365, chấp nhận số thập phân). `0` tắt tự xóa. |
+| `SRCAUDIT_REPORT_RETENTION_DAYS` | `7` | Số ngày giữ báo cáo (0–365, chấp nhận số thập phân). `0` tắt tự xóa. |
 
 ```powershell
-$env:SENTRY_REPORT_RETENTION_DAYS = "3"; npm start
+$env:SRCAUDIT_REPORT_RETENTION_DAYS = "3"; npm start
 ```
 
-Chỉ thư mục do SourceAudit tạo (tên UUID của giao diện hoặc timestamp của CLI) mới bị xóa. Thư mục tự đặt tên qua `--out`, file lẻ và symlink được giữ nguyên. Tuổi tính theo thời điểm sửa đổi cuối của thư mục. Logic nằm trong [src/report-retention.mjs](src/report-retention.mjs).
+Chỉ thư mục do SrcAudit tạo (tên UUID của giao diện hoặc timestamp của CLI) mới bị xóa. Thư mục tự đặt tên qua `--out`, file lẻ và symlink được giữ nguyên. Tuổi tính theo thời điểm sửa đổi cuối của thư mục. Logic nằm trong [src/report-retention.mjs](src/report-retention.mjs).
 
 ### Các file cục bộ
 
@@ -309,7 +309,7 @@ Chi tiết: [docs/testing/semgrep.tdd.md](docs/testing/semgrep.tdd.md).
 ## Lộ trình
 
 - [x] Đa tài khoản, mỗi tài khoản chỉ thấy lượt kiểm tra của mình
-- [x] Tự xóa báo cáo quá thời hạn lưu giữ (`SENTRY_REPORT_RETENTION_DAYS`)
+- [x] Tự xóa báo cáo quá thời hạn lưu giữ (`SRCAUDIT_REPORT_RETENTION_DAYS`)
 - [ ] Thời hạn lưu giữ và hạn mức dung lượng riêng cho từng tài khoản
 - [ ] Đổi mật khẩu cho thành viên
 - [ ] So phiên bản tự động cho Composer, Maven, Go, NuGet, Poetry, Yarn, pnpm

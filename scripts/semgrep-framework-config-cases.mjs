@@ -11,33 +11,33 @@ const prTitle = '${{ github.event.pull_request.title }}';
 export const frameworkConfigCases = [
   {
     name: 'actions-pr-title-multiline', ext: 'yml', language: 'GitHub Actions',
-    target: '.github/workflows/check.yml', cwe: 'CWE-78', ruleId: 'sentry-github-actions-script-injection',
+    target: '.github/workflows/check.yml', cwe: 'CWE-78', ruleId: 'srcaudit-github-actions-script-injection',
     vulnerable: workflow(['- run: |', '    echo "Checking PR"', '    echo "' + prTitle + '"']),
     fixed: workflow(['- env:', '    PR_TITLE: ' + prTitle, '  run: |', '    echo "Checking PR"', '    echo "$PR_TITLE"']),
     sink: 'run:', multiline: true,
   },
   {
     name: 'actions-head-ref-inline', ext: 'yaml', language: 'GitHub Actions',
-    target: '.github/workflows/check.yaml', cwe: 'CWE-78', ruleId: 'sentry-github-actions-script-injection',
+    target: '.github/workflows/check.yaml', cwe: 'CWE-78', ruleId: 'srcaudit-github-actions-script-injection',
     vulnerable: workflow(['- run: echo "${{ github.head_ref }}"']),
     fixed: workflow(['- run: echo "${{ github.run_id }}"']),
   },
   {
     name: 'docker-final-stage-root', language: 'Dockerfile',
-    target: 'Dockerfile', cwe: 'CWE-250', ruleId: 'sentry-dockerfile-root-user',
+    target: 'Dockerfile', cwe: 'CWE-250', ruleId: 'srcaudit-dockerfile-root-user',
     vulnerable: 'FROM node:22 AS build\nUSER root\nFROM node:22\nUSER 0:0\nCMD ["node", "server.js"]\n',
     fixed: 'FROM node:22 AS build\nUSER root\nFROM node:22\nUSER 0:0\nUSER node\nCMD ["node", "server.js"]\n',
     sink: 'USER 0:0',
   },
   {
     name: 'docker-final-stage-missing-user', language: 'Dockerfile',
-    target: 'Dockerfile', cwe: 'CWE-250', ruleId: 'sentry-dockerfile-root-user',
+    target: 'Dockerfile', cwe: 'CWE-250', ruleId: 'srcaudit-dockerfile-root-user',
     vulnerable: 'FROM alpine:3.21 AS build\nUSER 10001\nFROM alpine:3.21\nCMD ["/app"]\n',
     fixed: 'FROM alpine:3.21 AS build\nUSER 10001\nFROM alpine:3.21\nUSER 10001:10001\nCMD ["/app"]\n',
     sink: 'FROM alpine:3.21',
   },
   {
-    name: 'jsonwebtoken-literal-hmac-key', ext: 'ts', cwe: 'CWE-321', ruleId: 'sentry-node-jwt-literal-verification-key',
+    name: 'jsonwebtoken-literal-hmac-key', ext: 'ts', cwe: 'CWE-321', ruleId: 'srcaudit-node-jwt-literal-verification-key',
     vulnerable: [
       'import { verify as verifyToken } from "jsonwebtoken";',
       'export function claims(token: string) {',
@@ -53,7 +53,7 @@ export const frameworkConfigCases = [
     sink: '"SYNTHETIC_KEY_FIXTURE"',
   },
   {
-    name: 'spring-jdbc-template-bind', ext: 'java', cwe: 'CWE-89', ruleId: 'sentry-spring-jdbc-template-sql-injection',
+    name: 'spring-jdbc-template-bind', ext: 'java', cwe: 'CWE-89', ruleId: 'srcaudit-spring-jdbc-template-sql-injection',
     vulnerable: [
       'import org.springframework.jdbc.core.JdbcTemplate;',
       'import org.springframework.web.bind.annotation.RequestParam;',
@@ -78,7 +78,7 @@ export const frameworkConfigCases = [
     sink: 'sql',
   },
   {
-    name: 'laravel-db-select-bind', ext: 'php', cwe: 'CWE-89', ruleId: 'sentry-laravel-raw-sql-injection',
+    name: 'laravel-db-select-bind', ext: 'php', cwe: 'CWE-89', ruleId: 'srcaudit-laravel-raw-sql-injection',
     vulnerable: [
       '<?php',
       'use Illuminate\Http\Request;',
@@ -99,7 +99,7 @@ export const frameworkConfigCases = [
     sink: '$sql',
   },
   {
-    name: 'rails-net-http-destination', ext: 'rb', cwe: 'CWE-918', ruleId: 'sentry-rails-http-ssrf',
+    name: 'rails-net-http-destination', ext: 'rb', cwe: 'CWE-918', ruleId: 'srcaudit-rails-http-ssrf',
     vulnerable: [
       'require "net/http"',
       'class ReportsController < ApplicationController',
