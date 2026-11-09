@@ -1,0 +1,26 @@
+{
+  "name": "sourceaudit",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local static source security analysis with redacted reports",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "knowledge:expand": "node scripts/expand-knowledge.mjs",
+    "knowledge:sync": "node scripts/sync-knowledge.mjs",
+    "benchmark:semgrep": "node scripts/benchmark-semgrep.mjs",
+    "start": "node ui.mjs",
+    "test": "node --test",
+    "test:coverage": "node --experimental-test-coverage --test-coverage-include=src/*.mjs --test-coverage-lines=80 --test",
+    "scan": "node scan.mjs"
+  },
+  "dependencies": {
+    "@babel/parser": "7.29.13",
+    "@renovatebot/pep440": "^6.0.0",
+    "fast-xml-parser": "^5.12.0",
+    "fflate": "^0.8.3",
+    "semver": "^7.8.6"
+  }
+}

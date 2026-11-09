@@ -1,0 +1,502 @@
+rules:
+  - id: sentry-js-sql-injection
+    languages: [javascript, typescript]
+    mode: taint
+    severity: ERROR
+    message: Request input reaches the SQL statement.
+    pattern-sources:
+      - &request-expression
+        exact: true
+        pattern-either:
+          - pattern: req.query
+          - pattern: req.body
+          - pattern: req.params
+          - pattern: request.query
+          - pattern: request.body
+          - pattern: request.params
+          - pattern: req.headers
+          - pattern: request.headers
+          - pattern: req.cookies
+          - pattern: request.cookies
+          - pattern: req.get(...)
+          - pattern: request.get(...)
+          - pattern: req.header(...)
+          - pattern: request.header(...)
+      - exact: true
+        patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  import {Router} from "express";
+                  ...
+                  const $ROUTER = Router();
+                  ...
+              - pattern-inside: |
+                  import $EXPRESS from "express";
+                  ...
+                  const $ROUTER = $EXPRESS();
+                  ...
+              - pattern-inside: |
+                  const $EXPRESS = require("express");
+                  ...
+                  const $ROUTER = $EXPRESS();
+                  ...
+              - pattern-inside: |
+                  const $EXPRESS = require("express");
+                  ...
+                  const $ROUTER = $EXPRESS.Router();
+                  ...
+          - pattern-either:
+              - pattern-inside: $ROUTER.$METHOD(..., ($REQ, ...) => { ... }, ...)
+              - pattern-inside: $ROUTER.$METHOD(..., async ($REQ, ...) => { ... }, ...)
+              - pattern-inside: $ROUTER.$METHOD(..., function ($REQ, ...) { ... }, ...)
+              - pattern-inside: $ROUTER.$METHOD(..., async function ($REQ, ...) { ... }, ...)
+          - metavariable-regex:
+              metavariable: $METHOD
+              regex: '^(get|post|put|patch|delete|options|head|all)$'
+          - pattern-either:
+              - pattern: $REQ.query
+              - pattern: $REQ.body
+              - pattern: $REQ.params
+              - pattern: $REQ.headers
+              - pattern: $REQ.cookies
+              - pattern: $REQ.get(...)
+              - pattern: $REQ.header(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $DB.query($SQL, ...)
+              - pattern: $DB.execute($SQL, ...)
+              - pattern: $DB.raw($SQL, ...)
+              - pattern: $DB.literal($SQL)
+          - pattern-not: $DB.query({...}, ...)
+          - pattern-not: $DB.execute({...}, ...)
+          - metavariable-regex:
+              metavariable: $DB
+              regex: '(?i)^(db|pool|client|conn|connection|sequelize|knex|trx|tx)$'
+          - focus-metavariable: $SQL
+      - patterns:
+          - pattern-either:
+              - pattern: $DB.query({..., text:$SQL, ...}, ...)
+              - pattern: $DB.execute({..., sql:$SQL, ...}, ...)
+          - metavariable-regex:
+              metavariable: $DB
+              regex: '(?i)^(db|pool|client|conn|connection|sequelize|knex|trx|tx)$'
+          - focus-metavariable: $SQL
+  - id: sentry-js-command-injection
+    languages: [javascript, typescript]
+    mode: taint
+    severity: ERROR
+    message: Request input reaches a shell command.
+    pattern-sources: &request-input
+      - *request-expression
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: exec($COMMAND, ...)
+              - pattern: execSync($COMMAND, ...)
+              - pattern: child_process.exec($COMMAND, ...)
+              - pattern: child_process.execSync($COMMAND, ...)
+          - focus-metavariable: $COMMAND
+      - patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  import {exec as $RUN} from "$MODULE";
+                  ...
+              - pattern-inside: |
+                  import {execSync as $RUN} from "$MODULE";
+                  ...
+              - pattern-inside: |
+                  const {exec: $RUN} = require("$MODULE");
+                  ...
+              - pattern-inside: |
+                  const {execSync: $RUN} = require("$MODULE");
+                  ...
+          - metavariable-regex:
+              metavariable: $MODULE
+              regex: '^["'']?(node:)?child_process["'']?$'
+          - pattern: $RUN($COMMAND, ...)
+          - focus-metavariable: $COMMAND
+      - patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  import * as $CP from "$MODULE";
+                  ...
+              - pattern-inside: |
+                  import $CP from "$MODULE";
+                  ...
+              - pattern-inside: |
+                  const $CP = require("$MODULE");
+                  ...
+          - metavariable-regex:
+              metavariable: $MODULE
+              regex: '^["'']?(node:)?child_process["'']?$'
+          - pattern-either:
+              - pattern: $CP.exec($COMMAND, ...)
+              - pattern: $CP.execSync($COMMAND, ...)
+          - focus-metavariable: $COMMAND
+      - patterns:
+          - pattern-either:
+              - pattern: execFile($COMMAND, $ARGS, {..., shell:true, ...}, ...)
+              - pattern: spawn($COMMAND, $ARGS, {..., shell:true, ...}, ...)
+              - pattern: $CP.execFile($COMMAND, $ARGS, {..., shell:true, ...}, ...)
+              - pattern: $CP.spawn($COMMAND, $ARGS, {..., shell:true, ...}, ...)
+          - focus-metavariable:
+              - $COMMAND
+              - $ARGS
+  - id: sentry-js-ssrf
+    languages: [javascript, typescript]
+    mode: taint
+    severity: WARNING
+    message: Request input controls an outbound HTTP destination.
+    pattern-sources: *request-input
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: fetch($URL, ...)
+              - pattern: axios.get($URL, ...)
+              - pattern: axios.post($URL, ...)
+              - pattern: axios.put($URL, ...)
+              - pattern: axios.delete($URL, ...)
+              - pattern: http.get($URL, ...)
+              - pattern: https.get($URL, ...)
+          - focus-metavariable: $URL
+      - patterns:
+          - pattern-either:
+              - pattern: axios({..., url:$URL, ...}, ...)
+              - pattern: axios.request({..., url:$URL, ...}, ...)
+          - focus-metavariable: $URL
+  - id: sentry-express-path-traversal
+    languages: [javascript, typescript]
+    mode: taint
+    severity: ERROR
+    message: Request input controls an Express file path or its root directory.
+    pattern-sources: *request-input
+    pattern-sanitizers:
+      # Require a complete literal options shape so spreads or repeated keys cannot override root.
+      - exact: true
+        patterns:
+          - pattern-either:
+              - patterns:
+                  - pattern: $RES.$METHOD($FILE, $OPTIONS, ...)
+                  - metavariable-regex:
+                      metavariable: $METHOD
+                      regex: '^(sendFile|download)$'
+              - pattern: $RES.download($FILE, $NAME, $OPTIONS, ...)
+          - metavariable-regex:
+              metavariable: $RES
+              regex: '^(res|response)$'
+          - metavariable-regex:
+              metavariable: $OPTIONS
+              regex: |-
+                (?x) \A \{ \s* root \s* : \s*
+                (?: __dirname | path \. (?:join|resolve) \( \s* __dirname \s* , \s*
+                    (?: "[^"\\]*" | '[^'\\]*' ) \s* \) )
+                \s* (?: , \s* dotfiles \s* : \s* (?: "deny" | 'deny' | "ignore" | 'ignore' ) \s* )?
+                ,? \s* \} \z
+          - focus-metavariable: $FILE
+    pattern-sinks:
+      - patterns:
+          - pattern: $RES.$METHOD($FILE, ...)
+          - metavariable-regex:
+              metavariable: $RES
+              regex: '^(res|response)$'
+          - metavariable-regex:
+              metavariable: $METHOD
+              regex: '^(sendFile|download)$'
+          - focus-metavariable: $FILE
+      - patterns:
+          - pattern-either:
+              - patterns:
+                  - pattern: $RES.$METHOD($FILE, {..., root:$ROOT, ...}, ...)
+                  - metavariable-regex:
+                      metavariable: $METHOD
+                      regex: '^(sendFile|download)$'
+              - pattern: $RES.download($FILE, $NAME, {..., root:$ROOT, ...}, ...)
+          - metavariable-regex:
+              metavariable: $RES
+              regex: '^(res|response)$'
+          - focus-metavariable: $ROOT
+  - id: sentry-js-xss
+    languages: [javascript, typescript]
+    mode: taint
+    severity: ERROR
+    message: Request input reaches an Express HTML response or a DOM HTML sink.
+    pattern-sources: *request-input
+    pattern-sanitizers:
+      # Escape HTML only when the encoded text is the whole response body.
+      - exact: true
+        patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  import $ESC from "escape-html";
+                  ...
+              - pattern-inside: |
+                  const $ESC = require("escape-html");
+                  ...
+          - pattern-either:
+              - pattern-inside: $RES.send($ESC(...), ...)
+              - pattern-inside: $RES.type("html").send($ESC(...), ...)
+              - pattern-inside: $RES.type("text/html").send($ESC(...), ...)
+          - pattern: $ESC(...)
+    pattern-sinks:
+      - patterns:
+          - pattern: $RES.send($HTML, ...)
+          - pattern-not: $RES.send({...}, ...)
+          - pattern-not: $RES.send([...], ...)
+          - metavariable-regex:
+              metavariable: $RES
+              regex: '^(res|response)$'
+          - focus-metavariable: $HTML
+      - patterns:
+          - pattern-either:
+              - pattern: $RES.type("html").send($HTML, ...)
+              - pattern: $RES.type("text/html").send($HTML, ...)
+          - metavariable-regex:
+              metavariable: $RES
+              regex: '^(res|response)$'
+          - focus-metavariable: $HTML
+      - patterns:
+          - pattern-either:
+              - pattern: $NODE.innerHTML = $HTML
+              - pattern: $NODE.outerHTML = $HTML
+              - pattern: $NODE.insertAdjacentHTML($POSITION, $HTML)
+          - focus-metavariable: $HTML
+  - id: sentry-express-open-redirect
+    languages: [javascript, typescript]
+    mode: taint
+    severity: WARNING
+    message: Request input controls an Express redirect destination.
+    pattern-sources: *request-input
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $RES.redirect($URL)
+              - pattern: $RES.redirect($STATUS, $URL)
+          - metavariable-regex:
+              metavariable: $RES
+              regex: '^(res|response)$'
+          - focus-metavariable: $URL
+  - id: sentry-js-nosql-injection
+    languages: [javascript, typescript]
+    mode: taint
+    severity: ERROR
+    message: Request input controls a NoSQL filter or aggregation pipeline.
+    pattern-sources: *request-input
+    pattern-sanitizers:
+      # Only accept scalar conversion directly at an ordinary filter field.
+      - exact: true
+        patterns:
+          - pattern-either:
+              - patterns:
+                  - pattern: $MODEL.$METHOD({..., $FIELD:$VALUE, ...}, ...)
+                  - metavariable-regex:
+                      metavariable: $METHOD
+                      regex: &nosql-filter-methods '^(findOne|findOneAndUpdate|findOneAndDelete|updateOne|updateMany|deleteOne|deleteMany|countDocuments)$'
+              - pattern: $MODEL.aggregate([..., {$match:{..., $FIELD:$VALUE, ...}}, ...], ...)
+          - metavariable-regex:
+              metavariable: $FIELD
+              regex: '^[A-Za-z_][A-Za-z0-9_]*$'
+          - metavariable-pattern:
+              metavariable: $VALUE
+              pattern-either:
+                - pattern: String(...)
+                - pattern: Number(...)
+                - pattern: Boolean(...)
+          - focus-metavariable: $VALUE
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - patterns:
+                  - pattern: $MODEL.$METHOD($FILTER, ...)
+                  - metavariable-regex:
+                      metavariable: $METHOD
+                      regex: *nosql-filter-methods
+              - pattern: $MODEL.aggregate($FILTER, ...)
+          - focus-metavariable: $FILTER
+  - id: sentry-js-prototype-pollution
+    languages: [javascript, typescript]
+    mode: taint
+    severity: WARNING
+    message: Request input controls the keys merged or assigned into an object.
+    pattern-sources: *request-input
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: merge($TARGET, ..., $SOURCE, ...)
+              - pattern: _.merge($TARGET, ..., $SOURCE, ...)
+              - pattern: lodash.merge($TARGET, ..., $SOURCE, ...)
+              - pattern: defaultsDeep($TARGET, ..., $SOURCE, ...)
+              - pattern: _.defaultsDeep($TARGET, ..., $SOURCE, ...)
+              - pattern: lodash.defaultsDeep($TARGET, ..., $SOURCE, ...)
+          - focus-metavariable: $SOURCE
+      - patterns:
+          - pattern-either:
+              - pattern: _.set($TARGET, $KEY, ...)
+              - pattern: lodash.set($TARGET, $KEY, ...)
+              - pattern: _.setWith($TARGET, $KEY, ...)
+              - pattern: lodash.setWith($TARGET, $KEY, ...)
+          - focus-metavariable: $KEY
+  - id: sentry-js-template-injection
+    languages: [javascript, typescript]
+    mode: taint
+    severity: ERROR
+    message: Request input reaches template source code on the server.
+    pattern-sources: *request-input
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: ejs.render($TEMPLATE, ...)
+              - pattern: ejs.compile($TEMPLATE, ...)
+              - pattern: pug.render($TEMPLATE, ...)
+              - pattern: pug.compile($TEMPLATE, ...)
+              - pattern: handlebars.compile($TEMPLATE, ...)
+              - pattern: Handlebars.compile($TEMPLATE, ...)
+              - pattern: nunjucks.renderString($TEMPLATE, ...)
+          - focus-metavariable: $TEMPLATE
+  - id: sentry-js-code-injection
+    languages: [javascript, typescript]
+    mode: taint
+    severity: ERROR
+    message: Request input reaches JavaScript code evaluation.
+    pattern-sources: *request-input
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: eval($CODE)
+              - pattern: Function(..., $CODE)
+              - pattern: new Function(..., $CODE)
+              - pattern: vm.runInThisContext($CODE, ...)
+              - pattern: vm.runInContext($CODE, ...)
+              - pattern: vm.runInNewContext($CODE, ...)
+              - pattern: new vm.Script($CODE, ...)
+          - focus-metavariable: $CODE
+  - id: sentry-js-unsafe-deserialization
+    languages: [javascript, typescript]
+    mode: taint
+    severity: ERROR
+    message: Request input reaches node-serialize unserialize.
+    pattern-sources: *request-input
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  import $SERIALIZER from "node-serialize";
+                  ...
+              - pattern-inside: |
+                  import * as $SERIALIZER from "node-serialize";
+                  ...
+              - pattern-inside: |
+                  const $SERIALIZER = require("node-serialize");
+                  ...
+          - pattern: $SERIALIZER.unserialize($DATA, ...)
+          - focus-metavariable: $DATA
+      - patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  import {unserialize as $LOAD} from "node-serialize";
+                  ...
+              - pattern-inside: |
+                  const {unserialize:$LOAD} = require("node-serialize");
+                  ...
+          - pattern: $LOAD($DATA, ...)
+          - focus-metavariable: $DATA
+  - id: sentry-js-mass-assignment
+    languages: [javascript, typescript]
+    mode: taint
+    severity: WARNING
+    message: Request input controls the fields written to a model.
+    pattern-sources:
+      - *request-expression
+      # Preserve request-controlled shape when a computed field is stored in an alias.
+      - exact: true
+        patterns:
+          - pattern: '({..., [$KEY]:$VALUE, ...})'
+          - metavariable-regex:
+              metavariable: $KEY
+              regex: '^(?:req|request)\s*\.\s*(?:body|query|params|headers|cookies)(?:\s*\.\s*[A-Za-z_$][\w$]*)+$'
+    pattern-sanitizers:
+      # Exempt a complete flat object of fixed keys and scalar values.
+      - exact: true
+        patterns:
+          - pattern-either:
+              - pattern: const $NAME = $OBJECT;
+              - pattern: let $NAME = $OBJECT;
+              - pattern: var $NAME = $OBJECT;
+              - pattern: $MODEL.$METHOD($OBJECT, ...)
+              - pattern: $MODEL.$METHOD($FILTER, $OBJECT, ...)
+          - metavariable-regex:
+              metavariable: $OBJECT
+              regex: |-
+                (?x) \A \{ \s*
+                (?: [A-Za-z_]\w* \s* : \s*
+                    (?: (?:String|Number|Boolean) \( \s* (?:req|request) \.
+                          (?:body|query|params) \. [A-Za-z_]\w* \s* \)
+                      | "[^"\\\r\n]*" | '[^'\\\r\n]*' | -?[0-9]+(?:\.[0-9]+)? | true | false | null )
+                    \s* (?: , \s* | (?=\}) ) )+ \} \z
+          - focus-metavariable: $OBJECT
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $MODEL.create($DATA, ...)
+              - pattern: $MODEL.insertMany($DATA, ...)
+              - pattern: $MODEL.updateOne($FILTER, $DATA, ...)
+              - pattern: $MODEL.updateMany($FILTER, $DATA, ...)
+              - pattern: $MODEL.findByIdAndUpdate($ID, $DATA, ...)
+              - pattern: $MODEL.findOneAndUpdate($FILTER, $DATA, ...)
+          - metavariable-regex:
+              metavariable: $MODEL
+              regex: '^[A-Z][A-Za-z0-9_$]*$'
+          - focus-metavariable: $DATA
+
+  - id: sentry-js-untrusted-module
+    languages: [javascript, typescript]
+    mode: taint
+    severity: ERROR
+    message: Request input controls a JavaScript module specifier.
+    pattern-sources: *request-input
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: require($MODULE)
+              - pattern: import($MODULE)
+          - focus-metavariable: $MODULE
+
+  - id: sentry-js-file-write-path-traversal
+    languages: [javascript, typescript]
+    mode: taint
+    severity: ERROR
+    message: Request input controls the file path in a Node.js write API.
+    pattern-sources: *request-input
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  import * as $FS from "$MODULE";
+                  ...
+              - pattern-inside: |
+                  import $FS from "$MODULE";
+                  ...
+              - pattern-inside: |
+                  const $FS = require("$MODULE");
+                  ...
+          - metavariable-regex:
+              metavariable: $MODULE
+              regex: '^["'']?(node:)?fs(/promises)?["'']?$'
+          - pattern-either:
+              - pattern: $FS.writeFile($PATH, ...)
+              - pattern: $FS.writeFileSync($PATH, ...)
+              - pattern: $FS.promises.writeFile($PATH, ...)
+          - focus-metavariable: $PATH
+      - patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  import {writeFile as $WRITE} from "$MODULE";
+                  ...
+              - pattern-inside: |
+                  import {writeFileSync as $WRITE} from "$MODULE";
+                  ...
+          - metavariable-regex:
+              metavariable: $MODULE
+              regex: '^["'']?(node:)?fs(/promises)?["'']?$'
+          - pattern: $WRITE($PATH, ...)
+          - focus-metavariable: $PATH

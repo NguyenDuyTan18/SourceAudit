@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>__AUTH_TITLE__ — SourceAudit</title>
+  <style nonce="__STYLE_NONCE__">
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #101316; color: #edf1ed; font: 16px/1.5 system-ui, sans-serif; }
+    main { width: 100%; max-width: 420px; padding: 32px; border: 1px solid #394039; border-radius: 16px; background: #1b211d; }
+    .brand { color: #b4ce84; letter-spacing: .16em; font-size: 12px; font-weight: 700; }
+    h1 { margin: 12px 0 8px; font-size: 28px; }
+    p { margin: 0 0 24px; color: #b6bfb6; }
+    label { display: block; margin: 16px 0 6px; }
+    input { width: 100%; padding: 12px; border: 1px solid #596456; border-radius: 8px; background: #101613; color: inherit; font: inherit; }
+    input:focus { outline: 2px solid #b4ce84; outline-offset: 2px; }
+    button { width: 100%; margin-top: 24px; padding: 13px; border: 0; border-radius: 8px; background: #c1dd8a; color: #1a2410; font: inherit; font-weight: 700; cursor: pointer; }
+    .error { color: #ffb5a6; margin-top: 16px; }
+    .auth-switch { margin-top: 16px; }
+    .auth-switch:empty { display: none; }
+    a { color: #c1dd8a; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="brand">SOURCEAUDIT / SECURITY WORKSPACE</div>
+    <h1>__AUTH_TITLE__</h1>
+    <p>__AUTH_DESCRIPTION__</p>
+    <form method="post" action="__AUTH_ACTION__">
+      <input type="hidden" name="csrf" value="__LOGIN_CSRF__">
+      <label for="login-username">Tên đăng nhập</label>
+      <input id="login-username" name="username" autocomplete="username" maxlength="64" required>
+      <label for="login-password">Mật khẩu</label>
+      <input id="login-password" name="password" type="password" autocomplete="__PASSWORD_AUTOCOMPLETE__" __PASSWORD_MINLENGTH__ maxlength="256" required>
+      __AUTH_CONFIRMATION__
+      <button type="submit">__AUTH_TITLE__</button>
+      <div class="error" role="alert">__LOGIN_ERROR__</div>
+    </form>
+    <div class="auth-switch">__AUTH_LINK__</div>
+  </main>
+</body>
+</html>

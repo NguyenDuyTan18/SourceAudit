@@ -1,0 +1,466 @@
+rules:
+  - id: sentry-python-sql-injection
+    languages: [python]
+    mode: taint
+    severity: ERROR
+    message: Request input reaches a Python SQL statement.
+    pattern-sources: &python-request
+      - exact: true
+        pattern-either:
+          - pattern: request.args
+          - pattern: request.form
+          - pattern: request.GET
+          - pattern: request.POST
+          - pattern: request.query_params
+          - pattern: request.body
+          - pattern: request.data
+          - pattern: request.headers
+          - pattern: request.cookies
+          - pattern: request.COOKIES
+          - pattern: request.get_json(...)
+          - pattern: request.get_data(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $DB.execute($SQL, ...)
+              - pattern: $DB.executemany($SQL, ...)
+          - metavariable-regex:
+              metavariable: $DB
+              regex: '^(cur|cursor|conn|connection|db)$'
+          - focus-metavariable: $SQL
+  - id: sentry-python-command-injection
+    languages: [python]
+    mode: taint
+    severity: ERROR
+    message: Request input reaches a shell command in Python.
+    pattern-sources: *python-request
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: os.system($CMD)
+              - pattern: os.popen($CMD, ...)
+              - pattern: subprocess.run($CMD, ..., shell=True, ...)
+              - pattern: subprocess.Popen($CMD, ..., shell=True, ...)
+              - pattern: subprocess.call($CMD, ..., shell=True, ...)
+              - pattern: subprocess.check_output($CMD, ..., shell=True, ...)
+          - focus-metavariable: $CMD
+  - id: sentry-python-unsafe-deserialization
+    languages: [python]
+    mode: taint
+    severity: ERROR
+    message: Request input reaches an unsafe Python deserializer.
+    pattern-sources: *python-request
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: pickle.loads($DATA, ...)
+              - pattern: pickle.load($DATA, ...)
+              - pattern: yaml.unsafe_load($DATA, ...)
+          - focus-metavariable: $DATA
+
+  - id: sentry-php-sql-injection
+    languages: [php]
+    mode: taint
+    severity: ERROR
+    message: Request input reaches a PHP SQL statement.
+    pattern-sources: &php-request
+      - exact: true
+        pattern-either:
+          - pattern: $_GET
+          - pattern: $_POST
+          - pattern: $_REQUEST
+          - pattern: $_COOKIE
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $DB->query($SQL, ...)
+              - pattern: $DB->exec($SQL, ...)
+              - pattern: $DB->prepare($SQL, ...)
+              - pattern: mysqli_query($DB, $SQL, ...)
+          - focus-metavariable: $SQL
+  - id: sentry-php-command-injection
+    languages: [php]
+    mode: taint
+    severity: ERROR
+    message: Request input reaches a shell command in PHP.
+    pattern-sources: *php-request
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: exec($CMD, ...)
+              - pattern: shell_exec($CMD)
+              - pattern: system($CMD, ...)
+              - pattern: passthru($CMD, ...)
+              - pattern: popen($CMD, ...)
+          - focus-metavariable: $CMD
+  - id: sentry-php-file-inclusion
+    languages: [php]
+    mode: taint
+    severity: ERROR
+    message: Request input reaches an include or require path.
+    pattern-sources: *php-request
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: include $FILE;
+              - pattern: include_once $FILE;
+              - pattern: require $FILE;
+              - pattern: require_once $FILE;
+          - focus-metavariable: $FILE
+
+  - id: sentry-java-sql-injection
+    languages: [java]
+    mode: taint
+    severity: ERROR
+    message: Servlet request input reaches a JDBC SQL statement.
+    pattern-sources: &java-request
+      - exact: true
+        patterns:
+          - pattern-either:
+              - pattern: $REQ.getParameter(...)
+              - pattern: $REQ.getParameterValues(...)
+              - pattern: $REQ.getHeader(...)
+              - pattern: $REQ.getInputStream()
+              - pattern: $REQ.getReader()
+          - metavariable-regex:
+              metavariable: $REQ
+              regex: '^(req|request)$'
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $ST.executeQuery($SQL, ...)
+              - pattern: $ST.executeUpdate($SQL, ...)
+              - pattern: $ST.execute($SQL, ...)
+              - pattern: $ST.addBatch($SQL, ...)
+              - pattern: $ST.prepareStatement($SQL, ...)
+          - metavariable-regex:
+              metavariable: $ST
+              regex: '^(st|stmt|statement|conn|connection)$'
+          - focus-metavariable: $SQL
+  - id: sentry-java-command-injection
+    languages: [java]
+    mode: taint
+    severity: ERROR
+    message: Servlet request input controls a command in Java.
+    pattern-sources: *java-request
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: Runtime.getRuntime().exec($CMD, ...)
+              - pattern: new ProcessBuilder("sh", "-c", $CMD, ...)
+              - pattern: new ProcessBuilder("bash", "-c", $CMD, ...)
+          - focus-metavariable: $CMD
+  - id: sentry-java-unsafe-deserialization
+    languages: [java]
+    mode: taint
+    severity: ERROR
+    message: Servlet request input enters a Java object input stream.
+    pattern-sources: *java-request
+    pattern-sinks:
+      - patterns:
+          - pattern: new ObjectInputStream($DATA)
+          - focus-metavariable: $DATA
+
+  - id: sentry-go-sql-injection
+    languages: [go]
+    mode: taint
+    severity: ERROR
+    message: HTTP request input reaches a Go SQL statement.
+    pattern-sources: &go-request
+      - exact: true
+        patterns:
+          - pattern-either:
+              - pattern: $REQ.FormValue(...)
+              - pattern: $REQ.PostFormValue(...)
+              - pattern: $REQ.URL.Query().Get(...)
+              - pattern: $REQ.Header.Get(...)
+              - pattern: $REQ.PathValue(...)
+          - metavariable-regex:
+              metavariable: $REQ
+              regex: '^(r|req|request)$'
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $DB.Query($SQL, ...)
+              - pattern: $DB.QueryRow($SQL, ...)
+              - pattern: $DB.Exec($SQL, ...)
+              - pattern: $DB.QueryContext($CTX, $SQL, ...)
+              - pattern: $DB.QueryRowContext($CTX, $SQL, ...)
+              - pattern: $DB.ExecContext($CTX, $SQL, ...)
+          - metavariable-regex:
+              metavariable: $DB
+              regex: '^(db|tx|conn)$'
+          - focus-metavariable: $SQL
+  - id: sentry-go-command-injection
+    languages: [go]
+    mode: taint
+    severity: ERROR
+    message: HTTP request input controls an executable or shell command in Go.
+    pattern-sources: *go-request
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: exec.Command($PROGRAM, ...)
+              - pattern: exec.CommandContext($CTX, $PROGRAM, ...)
+          - focus-metavariable: $PROGRAM
+      - patterns:
+          - pattern-either:
+              - pattern: exec.Command("sh", "-c", $CMD, ...)
+              - pattern: exec.Command("bash", "-c", $CMD, ...)
+              - pattern: exec.CommandContext($CTX, "sh", "-c", $CMD, ...)
+              - pattern: exec.CommandContext($CTX, "bash", "-c", $CMD, ...)
+          - focus-metavariable: $CMD
+  - id: sentry-go-ssrf
+    languages: [go]
+    mode: taint
+    severity: WARNING
+    message: HTTP request input controls an outbound HTTP URL in Go.
+    pattern-sources: *go-request
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: http.Get($URL)
+              - pattern: http.Post($URL, ...)
+              - pattern: http.Head($URL)
+              - pattern: http.NewRequest($METHOD, $URL, ...)
+              - pattern: http.NewRequestWithContext($CTX, $METHOD, $URL, ...)
+          - focus-metavariable: $URL
+
+  - id: sentry-csharp-sql-injection
+    languages: [csharp]
+    mode: taint
+    severity: ERROR
+    message: ASP.NET request input reaches a C# SQL statement.
+    pattern-sources: &csharp-request
+      - exact: true
+        pattern-either:
+          - pattern: Request.Query[$KEY]
+          - pattern: Request.Form[$KEY]
+          - pattern: Request.Headers[$KEY]
+          - pattern: Request.Cookies[$KEY]
+          - pattern: Request.RouteValues[$KEY]
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: new SqlCommand($SQL, ...)
+              - pattern: $SET.FromSqlRaw($SQL, ...)
+          - focus-metavariable: $SQL
+  - id: sentry-csharp-path-traversal
+    languages: [csharp]
+    mode: taint
+    severity: ERROR
+    message: ASP.NET request input controls a file path.
+    pattern-sources: *csharp-request
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: File.ReadAllText($FILE, ...)
+              - pattern: File.ReadAllBytes($FILE, ...)
+              - pattern: File.OpenRead($FILE)
+          - focus-metavariable: $FILE
+  - id: sentry-csharp-open-redirect
+    languages: [csharp]
+    mode: taint
+    severity: WARNING
+    message: ASP.NET request input controls a redirect target.
+    pattern-sources: *csharp-request
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: Redirect($URL)
+              - pattern: RedirectPermanent($URL)
+          - focus-metavariable: $URL
+
+  - id: sentry-python-ldap-injection
+    languages: [python]
+    mode: taint
+    severity: ERROR
+    message: Request input reaches an LDAP search filter.
+    pattern-sources: *python-request
+    pattern-sanitizers:
+      - exact: true
+        pattern: ldap3.utils.conv.escape_filter_chars(...)
+      # Cover assignment of escaped input in CE. Restrict this match so it
+      # cannot hide a nested LDAP call evaluated as an argument.
+      - exact: false
+        patterns:
+          - pattern: ldap3.utils.conv.escape_filter_chars($INPUT)
+          - metavariable-regex:
+              metavariable: $INPUT
+              regex: |-
+                (?x) ^ (?: [A-Za-z_]\w* |
+                  request\.(?:args|form|GET|POST|query_params|cookies|COOKIES|headers)
+                  \[\s*(?:"[^"\r\n]*"|'[^'\r\n]*')\s*\]
+                ) $
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $LDAP.search($BASE, $FILTER, ...)
+              - pattern: $LDAP.search(..., search_filter=$FILTER, ...)
+          - metavariable-regex:
+              metavariable: $LDAP
+              regex: '^(ldap|ldap_conn|ldap_connection)$'
+          - focus-metavariable: $FILTER
+
+  - id: sentry-php-unsafe-deserialization
+    languages: [php]
+    mode: taint
+    severity: ERROR
+    message: Request input reaches PHP unserialize.
+    pattern-sources: *php-request
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: unserialize($DATA, ...)
+              - pattern: \unserialize($DATA, ...)
+          - focus-metavariable: $DATA
+
+  - id: sentry-java-xpath-injection
+    languages: [java]
+    mode: taint
+    severity: ERROR
+    message: Servlet request input reaches a JAXP XPath expression.
+    pattern-sources: *java-request
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: (javax.xml.xpath.XPath $XP).evaluate($QUERY, ...)
+              - pattern: (javax.xml.xpath.XPath $XP).evaluateExpression($QUERY, ...)
+              - pattern: (javax.xml.xpath.XPath $XP).compile($QUERY)
+          - focus-metavariable: $QUERY
+
+  - id: sentry-go-log-injection
+    languages: [go]
+    mode: taint
+    severity: WARNING
+    message: Request input can add control characters to a plain-text log entry.
+    pattern-sources: *go-request
+    pattern-sanitizers:
+      - exact: true
+        pattern: strconv.Quote(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: log.Print(..., $MESSAGE, ...)
+              - pattern: log.Println(..., $MESSAGE, ...)
+              - pattern: log.Printf($MESSAGE, ...)
+          - focus-metavariable: $MESSAGE
+
+  - id: sentry-csharp-ssrf
+    languages: [csharp]
+    mode: taint
+    severity: WARNING
+    message: ASP.NET request input controls the destination of an HttpClient request.
+    pattern-sources: *csharp-request
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $HTTP.GetAsync($URL, ...)
+              - pattern: $HTTP.GetStringAsync($URL, ...)
+              - pattern: $HTTP.GetStreamAsync($URL, ...)
+              - pattern: $HTTP.GetByteArrayAsync($URL, ...)
+              - pattern: $HTTP.PostAsync($URL, ...)
+              - pattern: $HTTP.PutAsync($URL, ...)
+              - pattern: $HTTP.DeleteAsync($URL, ...)
+          - metavariable-regex:
+              metavariable: $HTTP
+              regex: '^(?:this\.)?(?:_?httpClient|client)$'
+          - focus-metavariable: $URL
+
+  - id: sentry-python-flask-ssti
+    languages: [python]
+    mode: taint
+    severity: ERROR
+    message: Request input is compiled as Flask template source.
+    pattern-sources: *python-request
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: flask.render_template_string($TEMPLATE, ...)
+              - pattern: flask.render_template_string(..., source=$TEMPLATE, ...)
+          - focus-metavariable: $TEMPLATE
+
+  - id: sentry-php-curl-ssrf
+    languages: [php]
+    mode: taint
+    severity: WARNING
+    message: Request input controls the destination of a PHP cURL handle.
+    pattern-sources: *php-request
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: curl_init($URL)
+              - pattern: curl_setopt($HANDLE, CURLOPT_URL, $URL)
+          - focus-metavariable: $URL
+
+  - id: sentry-go-path-traversal
+    languages: [go]
+    mode: taint
+    severity: ERROR
+    message: HTTP request input controls a path opened through the Go os package.
+    pattern-sources: *go-request
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: os.ReadFile($PATH)
+              - pattern: os.Open($PATH)
+          - focus-metavariable: $PATH
+
+  - id: sentry-csharp-command-injection
+    languages: [csharp]
+    mode: taint
+    severity: ERROR
+    message: ASP.NET request input controls the executable passed to a process API.
+    pattern-sources: *csharp-request
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: System.Diagnostics.Process.Start($PROGRAM, $ARGUMENTS, ...)
+              - pattern: new System.Diagnostics.ProcessStartInfo($PROGRAM, ...)
+              - pattern: new System.Diagnostics.ProcessStartInfo($PROGRAM, ...) { ... }
+              - pattern: new System.Diagnostics.ProcessStartInfo(...) { ..., FileName = $PROGRAM, ... }
+              - pattern: new System.Diagnostics.ProcessStartInfo { ..., FileName = $PROGRAM, ... }
+          - focus-metavariable: $PROGRAM
+
+  - id: sentry-python-requests-ssrf
+    languages: [python]
+    mode: taint
+    severity: WARNING
+    message: Request input controls the destination URL in Python Requests.
+    pattern-sources: *python-request
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: requests.get($URL, ...)
+              - pattern: requests.post($URL, ...)
+              - pattern: requests.request($METHOD, $URL, ...)
+              - pattern: requests.get(..., url=$URL, ...)
+              - pattern: requests.post(..., url=$URL, ...)
+              - pattern: requests.request(..., url=$URL, ...)
+          - focus-metavariable: $URL
+
+  - id: sentry-php-open-redirect
+    languages: [php]
+    mode: taint
+    severity: WARNING
+    message: Request input reaches the destination of a PHP Location header.
+    pattern-sources: *php-request
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: 'header("Location: " . $URL, ...)'
+              - pattern: 'header("Location:" . $URL, ...)'
+          - focus-metavariable: $URL
+
+  - id: sentry-java-outbound-ssrf
+    languages: [java]
+    mode: taint
+    severity: WARNING
+    message: Servlet request input controls a Java outbound destination.
+    pattern-sources: *java-request
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: java.net.http.HttpRequest.newBuilder($URL)
+              - pattern: java.net.URI.create($URL).toURL().openStream()
+          - focus-metavariable: $URL

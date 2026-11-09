@@ -1,0 +1,13 @@
+[
+  {
+    "id": "CUSTOM-UNTRUSTED-REDIRECT",
+    "title": "Redirect nhận đích trực tiếp từ query cần kiểm tra",
+    "severity": "medium",
+    "cwe": "CWE-601",
+    "extensions": [".js", ".mjs", ".ts"],
+    "containsAll": ["res.redirect(", "req.query."],
+    "impact": "Nếu thiếu xác minh đích, người dùng có thể bị chuyển hướng đến website không tin cậy.",
+    "remediation": "Chỉ cho phép đường dẫn nội bộ hoặc allowlist origin; kiểm tra đầu vào sau khi parse URL.",
+    "reference": "https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html"
+  }
+]

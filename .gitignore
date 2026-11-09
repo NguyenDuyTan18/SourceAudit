@@ -1,0 +1,10 @@
+node_modules/
+.scanner-reports/
+.scanner-tools/
+.scanner-auth/
+.ui-session.json
+.ui-public.json
+ui.log
+ui-error.log
+knowledge-local/
+*.zip

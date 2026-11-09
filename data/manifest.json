@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "builtAt": "2026-11-05T16:17:21.278Z",
+  "cweVersion": "5.0",
+  "wstgVersion": "4.2",
+  "selection": "Complete published CWE weakness list; all WSTG v4.2 test IDs; bounded recent GitHub-reviewed advisory pages for seven ecosystems plus five reference CVEs. Advisory sample is not complete.",
+  "sources": [
+    {
+      "url": "https://cwe.mitre.org/data/xml/cwec_latest.xml.zip",
+      "retrievedAt": "2026-11-05T16:16:59.742Z",
+      "sha256": "bcda44c9abf61ff977f50c3c6649eea5a97a7b0626b0396c2c3ec4bfb973a3dc",
+      "bytes": 2119263
+    },
+    {
+      "url": "https://codeload.github.com/OWASP/wstg/zip/refs/tags/v4.2",
+      "retrievedAt": "2026-11-05T16:17:03.258Z",
+      "sha256": "3eb8490a828704ce0c1976b520b09494d312e662ac483f8fe04e522b570a4220",
+      "bytes": 12852385
+    },
+    {
+      "url": "https://api.github.com/advisories?type=reviewed&ecosystem=npm&per_page=100&sort=updated&direction=desc",
+      "retrievedAt": "2026-11-05T16:17:05.225Z",
+      "sha256": "402e1e4bf90c8f74ebcde698bb5befa4a3f2aaa205cd96db2f0c4c098ed60b54",
+      "bytes": 725812
+    },
+    {
+      "url": "https://api.github.com/advisories?type=reviewed&ecosystem=npm&per_page=100&sort=updated&direction=desc&after=Y3Vyc29yOnYyOpK0MjAyNi0xMC0yOFQxOTo1NzoyMVrOAAf9yw%3D%3D",
+      "retrievedAt": "2026-11-05T16:17:06.889Z",
+      "sha256": "05fde9da3c8e75592c3a10185273226ecfc2dd069de31b663bcdf56fcd7164b8",
+      "bytes": 616142
+    },
+    {
+      "url": "https://api.github.com/advisories?type=reviewed&ecosystem=npm&per_page=100&sort=updated&direction=desc&after=Y3Vyc29yOnYyOpK0MjAyNi0xMC0yMlQxNjozODo0N1rOAAfxqA%3D%3D",
+      "retrievedAt": "2026-11-05T16:17:08.594Z",
+      "sha256": "bf903ecb60a8abc47d64a699aa26342b3d264e252a3553d8415c6e16530ed15e",
+      "bytes": 766504
+    },
+    {
+      "url": "https://api.github.com/advisories?type=reviewed&ecosystem=pip&per_page=100&sort=updated&direction=desc",
+      "retrievedAt": "2026-11-05T16:17:09.954Z",
+      "sha256": "ec2a4512dc6fe325cc0e634a7475ddad66002c366f923a57a15e08de073ab910",
+      "bytes": 803084
+    },
+    {
+      "url": "https://api.github.com/advisories?type=reviewed&ecosystem=pip&per_page=100&sort=updated&direction=desc&after=Y3Vyc29yOnYyOpK0MjAyNi0xMC0yN1QxNzoyNTowNFrOAAS8TA%3D%3D",
+      "retrievedAt": "2026-11-05T16:17:11.080Z",
+      "sha256": "dee57e36c2820efa39c1fa71a8febd0ac6210a83957c1594057748470667fbd0",
+      "bytes": 588076
+    },
+    {
+      "url": "https://api.github.com/advisories?type=reviewed&ecosystem=composer&per_page=100&sort=updated&direction=desc",
+      "retrievedAt": "2026-11-05T16:17:12.664Z",
+      "sha256": "1f5eb60bbee673fe659793a91436d1d5066c12c185defb15a096088d4c8eedea",
+      "bytes": 710409
+    },
+    {
+      "url": "https://api.github.com/advisories?type=reviewed&ecosystem=maven&per_page=100&sort=updated&direction=desc",
+      "retrievedAt": "2026-11-05T16:17:14.097Z",
+      "sha256": "886bc8238d87be6132d7cc37a7b817e51181262ecc0bcbfe5b64808b46c117ee",
+      "bytes": 453582
+    },
+    {
+      "url": "https://api.github.com/advisories?type=reviewed&ecosystem=nuget&per_page=100&sort=updated&direction=desc",
+      "retrievedAt": "2026-11-05T16:17:15.529Z",
+      "sha256": "61a3e2a5812ed031d5dafc72b7e121565bb93ecab4d28621703abfc1c2e9b162",
+      "bytes": 1003151
+    },
+    {
+      "url": "https://api.github.com/advisories?type=reviewed&ecosystem=rubygems&per_page=100&sort=updated&direction=desc",
+      "retrievedAt": "2026-11-05T16:17:16.678Z",
+      "sha256": "715288d771dbb344d18aade71be5e77a0c27b461dbc90b5f6fb1a8575eb92b5e",
+      "bytes": 607229
+    },
+    {
+      "url": "https://api.github.com/advisories?type=reviewed&ecosystem=go&per_page=100&sort=updated&direction=desc",
+      "retrievedAt": "2026-11-05T16:17:18.819Z",
+      "sha256": "dd577a64631a039e029155f864a421df6f4b4be05adc79754964fd78b61b8f5d",
+      "bytes": 819762
+    },
+    {
+      "url": "https://api.github.com/advisories?cve_id=CVE-2021-23337",
+      "retrievedAt": "2026-11-05T16:17:19.275Z",
+      "sha256": "c2f2cbb631ef8734042f7706ae37c1d5718ec780ff9dd9f0f85f9813a8e71c11",
+      "bytes": 7010
+    },
+    {
+      "url": "https://api.github.com/advisories?cve_id=CVE-2022-29078",
+      "retrievedAt": "2026-11-05T16:17:19.734Z",
+      "sha256": "3e291b3c62940e7bfc0bbbe11bc67d0b062436d46e5735b234478f058bde8712",
+      "bytes": 1922
+    },
+    {
+      "url": "https://api.github.com/advisories?cve_id=CVE-2022-23529",
+      "retrievedAt": "2026-11-05T16:17:20.235Z",
+      "sha256": "a033e30177445c07bf1984dfc71525bf4a8cf4c28b242df5a05b8f34e8a6cbb1",
+      "bytes": 2724
+    },
+    {
+      "url": "https://api.github.com/advisories?cve_id=CVE-2025-29927",
+      "retrievedAt": "2026-11-05T16:17:20.720Z",
+      "sha256": "08e78939c52056cecef86f606043b1a853912167bd1048cb4e0f582261b0832d",
+      "bytes": 5324
+    },
+    {
+      "url": "https://api.github.com/advisories?cve_id=CVE-2024-34069",
+      "retrievedAt": "2026-11-05T16:17:21.278Z",
+      "sha256": "73bc4ad12e7dcdd40817e1772735ec2d76734a22309547dbcb96cc6d23aac689",
+      "bytes": 3430
+    }
+  ],
+  "errors": [],
+  "weaknesses": 984,
+  "wstg": 97,
+  "advisories": 936
+}

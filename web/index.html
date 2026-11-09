@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="session-token" content="__SESSION_TOKEN__">
+  <title>SourceAudit — Kiểm tra bảo mật</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%2365e2c2'/%3E%3Cpath d='M9 8h14v8c0 5-7 9-7 9s-7-4-7-9z' fill='%230b141c'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+<aside class="sidebar">
+  <a class="brand" href="/" aria-label="SourceAudit, trang chủ"><span class="brand-icon">S</span><span>SourceAudit<small>SECURITY WORKSPACE</small></span></a>
+  <p class="nav-label">KHÔNG GIAN LÀM VIỆC</p>
+  <nav aria-label="Điều hướng chính">
+    <button class="nav-item active" data-view="scan"><span aria-hidden="true">◎</span> Kiểm tra bảo mật</button>
+    <button class="nav-item" data-view="knowledge"><span aria-hidden="true">▦</span> Thư viện nhận dạng</button>
+    <button class="nav-item" data-view="writeups"><span aria-hidden="true">▤</span> Nhập write-up</button>
+    <button class="nav-item" data-view="history"><span aria-hidden="true">◷</span> Phiên kiểm tra</button>
+    <button class="nav-item" data-view="users" id="nav-users" hidden><span aria-hidden="true">◉</span> Tài khoản</button>
+  </nav>
+  <div class="sidebar-bottom"><span class="live-dot"></span> Chạy trên máy của bạn<p>Mã nguồn được phân tích tĩnh tại máy.</p><small>LOCAL EDITION · v1.1</small></div>
+</aside>
+<main>
+  <header class="topbar">
+    <div><span class="breadcrumb">WORKSPACE</span><span class="slash">/</span><span id="breadcrumb-current">Kiểm tra bảo mật</span></div>
+    <div class="topbar-actions">
+      <span class="local-badge"><span class="live-dot"></span> <span id="account-name">Local workspace</span></span>
+      <button class="button small" id="logout-button" type="button" __LOGOUT_VISIBILITY__>Đăng xuất</button>
+    </div>
+  </header>
+  <div class="page-content">
+    <div id="global-message" class="message error" role="alert" hidden></div>
+    <section id="view-scan" class="view">
+      <div class="scan-hero">
+        <div>
+          <p class="eyebrow">SOURCEAUDIT / PHÂN TÍCH TĨNH</p>
+          <h1>Kiểm tra mã nguồn<span class="accent">.</span></h1>
+          <p>Tìm điểm yếu, xem đúng dòng mã và chọn cách sửa phù hợp.</p>
+        </div>
+        <span id="scan-readiness" class="scan-readiness" role="status">Đang kết nối…</span>
+      </div>
+      <div class="scan-grid">
+        <section class="panel scan-panel" aria-labelledby="scan-title">
+          <div class="panel-title"><h2 id="scan-title">Tạo lượt quét</h2><span class="step">01 / MÃ NGUỒN</span></div>
+          <form id="scan-form">
+            <fieldset id="source-upload" class="analysis-options source-upload" disabled>
+              <legend>Chọn đầu vào</legend>
+              <div class="upload-kind">
+                <label><input id="upload-kind-zip" type="radio" name="upload-kind" value="zip" checked><span class="upload-kind-icon" aria-hidden="true">ZIP</span><span><strong>Tải ZIP</strong><small>Dùng gói mã nguồn đã nén</small></span></label>
+                <label><input id="upload-kind-folder" type="radio" name="upload-kind" value="folder"><span class="upload-kind-icon" aria-hidden="true">DIR</span><span><strong>Tải thư mục</strong><small>Chọn trực tiếp từ máy bạn</small></span></label>
+              </div>
+              <div id="zip-picker" class="source-upload-box">
+                <label class="file-trigger" for="source-zip">Chọn tệp ZIP</label>
+                <input id="source-zip" type="file" accept=".zip,application/zip" required aria-describedby="source-selection zip-limits">
+                <span class="picker-hint">Một tệp .zip</span>
+              </div>
+              <div id="folder-picker" class="source-upload-box" hidden>
+                <label class="file-trigger" for="source-folder">Chọn thư mục</label>
+                <input id="source-folder" type="file" webkitdirectory disabled aria-describedby="source-selection zip-limits">
+                <span class="picker-hint">Giữ cấu trúc thư mục</span>
+              </div>
+              <p id="source-selection" class="field-help" role="status">Chưa chọn tệp ZIP.</p>
+              <p id="zip-limits" class="field-help">Mỗi lượt nhận tối đa 2.000 tệp mã nguồn, 1 MiB mỗi tệp và 20 MiB tổng cộng. ZIP tải lên tối đa 20 MiB.</p>
+            </fieldset>
+            <fieldset id="source-analysis-options" class="analysis-options" disabled>
+              <legend>Phân tích mã nguồn</legend>
+              <label for="source-analysis">Chế độ kiểm tra</label>
+              <select id="source-analysis" aria-describedby="source-analysis-help">
+                <option value="quick">Quét nhanh</option>
+                <option value="deep">Phân tích sâu bằng Semgrep</option>
+              </select>
+              <p id="source-analysis-help" class="field-help">Dò mẫu mã nguồn, cấu hình và phiên bản thư viện.</p>
+            </fieldset>
+            <div class="form-bottom"><span class="subtle" id="scan-scope">Phân tích tĩnh · Xử lý trên máy</span><button id="scan-button" class="button primary" type="submit" disabled><span id="scan-action">Bắt đầu kiểm tra</span> <span aria-hidden="true">→</span></button></div>
+          </form>
+          <div id="scan-progress" class="progress-bar" role="status" hidden><span class="spinner" aria-hidden="true"></span><div><strong id="scan-stage">Đang chuẩn bị lượt quét…</strong><p>Kết quả sẽ xuất hiện bên dưới.</p></div></div>
+        </section>
+        <aside class="panel overview-panel">
+          <p class="eyebrow">PHẠM VI KIỂM TRA</p>
+          <h2>Chọn cách quét phù hợp</h2>
+          <dl class="scan-modes">
+            <div><dt>Quét nhanh</dt><dd>Rà soát mã, cấu hình và phiên bản thư viện.</dd></div>
+            <div><dt>Quét sâu</dt><dd>Semgrep theo dõi dữ liệu từ đầu vào đến vị trí nhạy cảm.</dd></div>
+          </dl>
+          <div class="overview-stats"><div><strong id="rule-count">82</strong><span>quy tắc quét nhanh</span></div><div><strong id="topic-count">5004</strong><span>mục tham khảo</span></div><div><strong>3</strong><span>định dạng báo cáo</span></div></div>
+        </aside>
+      </div>
+      <section class="results-section" aria-labelledby="results-title"><div class="section-heading"><div><h2 id="results-title">Kết quả kiểm tra <span id="result-total" class="count-badge">0</span></h2><p id="result-target">Chưa có lần kiểm tra nào được chọn.</p></div><div class="report-actions"><button class="button small" data-download="html" disabled>↓ HTML</button><button class="button small" data-download="json" disabled>↓ JSON</button><button class="button small" data-download="txt" disabled>↓ TXT</button></div></div>
+        <div id="severity-stats" class="severity-stats" aria-label="Tổng hợp mức độ"><div class="stat critical"><span><i></i>Nghiêm trọng</span><strong id="count-critical">0</strong></div><div class="stat high"><span><i></i>Cao</span><strong id="count-high">0</strong></div><div class="stat medium"><span><i></i>Trung bình</span><strong id="count-medium">0</strong></div><div class="stat low"><span><i></i>Thấp</span><strong id="count-low">0</strong></div><div class="stat info"><span><i></i>Thông tin</span><strong id="count-info">0</strong></div></div>
+        <div id="report-notice" class="message" role="status" hidden></div>
+        <div class="panel results-panel"><div class="results-toolbar"><input id="finding-search" type="search" aria-label="Tìm phát hiện" placeholder="Tìm tên, CWE hoặc vị trí…"><select id="severity-filter" aria-label="Lọc theo mức độ"><option value="all">Tất cả mức độ</option><option value="critical">Nghiêm trọng</option><option value="high">Cao</option><option value="medium">Trung bình</option><option value="low">Thấp</option><option value="info">Thông tin</option></select></div>
+          <div id="results-empty" class="empty-state"><span class="empty-icon" aria-hidden="true">⌕</span><h3>Chưa có kết quả phân tích.</h3><p>Tải ZIP hoặc chọn thư mục mã nguồn để xem báo cáo.</p></div>
+          <div id="finding-workspace" class="finding-workspace" hidden><div id="finding-list" class="finding-list" aria-label="Danh sách phát hiện"></div><section id="finding-detail" class="finding-detail" aria-label="Chi tiết phát hiện"></section></div>
+        </div>
+        <p class="result-footnote">Phát hiện theo mẫu cần được kiểm chứng. Không có phát hiện không đồng nghĩa với không có lỗ hổng.</p>
+      </section>
+    </section>
+    <section id="view-knowledge" class="view" hidden><div class="page-heading"><div><p class="eyebrow">CWE · OWASP WSTG / ASVS / API · CVE · CISA KEV</p><h1>Thư viện nhận dạng<span class="accent">.</span></h1><p>Nguồn chính thức được lưu offline, có điều kiện áp dụng và liên kết đối chiếu.</p></div></div><p id="corpus-summary" class="message">Đang đọc thông tin kho dữ liệu…</p><div class="knowledge-controls"><input id="knowledge-search" class="knowledge-search" type="search" placeholder="Tìm ASVS-v5.0.0-1.2.4, API1:2023, CVE, CWE hoặc package…" aria-label="Tìm trong thư viện"><select id="knowledge-kind" aria-label="Loại dữ liệu"><option value="all">Tất cả dữ liệu</option><option value="cwe">CWE</option><option value="owasp">OWASP WSTG</option><option value="asvs">OWASP ASVS 5.0</option><option value="api">API Security 2023</option><option value="advisory">CVE / GHSA</option><option value="kev">CISA KEV</option><option value="curated">Hướng dẫn rà soát</option></select></div><div class="knowledge-pagination"><span id="knowledge-total"></span><div><button id="knowledge-prev" class="button small">← Trước</button><button id="knowledge-next" class="button small">Sau →</button></div></div><div id="knowledge-grid" class="knowledge-grid"></div><p class="result-footnote">Mục ngữ cảnh không đồng nghĩa một rule có thể phát hiện. Advisory là snapshot được chọn, không phải toàn bộ CVE. KEV là lịch sử khai thác công khai của CVE, không chứng minh mục tiêu của bạn đã bị khai thác.</p></section>
+    <section id="view-writeups" class="view" hidden><div class="page-heading"><div><p class="eyebrow">TÀI LIỆU THAM KHẢO</p><h1>Nhập write-up<span class="accent">.</span></h1><p>Liên kết ghi chú và tài liệu với phát hiện có cùng chủ đề.</p></div></div><section class="panel writeup-panel"><form id="writeup-form"><label for="writeup-file" class="upload-box"><span class="upload-icon" aria-hidden="true">↑</span><strong>Chọn ghi chú TXT hoặc Markdown</strong><span>Tối đa 1 MiB · Nội dung được xử lý trên máy</span><input id="writeup-file" type="file" accept=".txt,.md"></label><label for="writeup-text">Hoặc dán nội dung hay URL có tên chủ đề</label><textarea id="writeup-text" rows="12" placeholder="Ví dụ: SQL injection khi đầu vào được ghép trực tiếp vào truy vấn…"></textarea><div class="form-bottom"><span class="subtle">Chỉ lưu nhóm chủ đề và URL tham khảo.</span><button id="writeup-button" class="button primary" type="submit">Nhập kiến thức →</button></div></form><div id="writeup-result" class="message" role="status" hidden></div></section><p class="result-footnote">Khi URL tham khảo không ghi rõ chủ đề, hãy dán phần mô tả của write-up.</p></section>
+    <section id="view-history" class="view" hidden><div class="page-heading"><div><p class="eyebrow">CÁC LẦN KIỂM TRA CỦA BẠN</p><h1>Phiên kiểm tra<span class="accent">.</span></h1><p>Chỉ tài khoản của bạn thấy các lần kiểm tra này. Giữ tối đa 20 lần gần nhất; báo cáo tự xóa khi quá thời hạn lưu giữ.</p></div><button id="refresh-history" class="button secondary">Làm mới ↻</button></div><div id="history-list" class="history-list"></div></section>
+    <section id="view-users" class="view" hidden><div class="page-heading"><div><p class="eyebrow">QUẢN TRỊ</p><h1>Tài khoản<span class="accent">.</span></h1><p>Mỗi tài khoản chỉ thấy lần kiểm tra và báo cáo của chính mình. Xóa tài khoản sẽ xóa luôn báo cáo của tài khoản đó.</p></div></div><section class="panel writeup-panel"><form id="user-form"><label for="new-username">Tên đăng nhập</label><input id="new-username" autocomplete="off" minlength="3" maxlength="64" pattern="[A-Za-z0-9_.-]{3,64}" required><label for="new-password">Mật khẩu (ít nhất 15 ký tự)</label><input id="new-password" type="password" autocomplete="new-password" minlength="15" maxlength="256" required><div class="form-bottom"><span class="subtle">Gửi mật khẩu cho người dùng qua kênh riêng.</span><button id="user-button" class="button primary" type="submit">Tạo tài khoản →</button></div></form><div id="user-result" class="message" role="status" hidden></div></section><div id="user-list" class="history-list"></div></section>
+    <footer class="footer"><span>SourceAudit / Local Security Workspace</span><span>Chỉ kiểm tra hệ thống bạn sở hữu hoặc được phép kiểm thử.</span></footer>
+  </div>
+</main>
+</body>
+</html>

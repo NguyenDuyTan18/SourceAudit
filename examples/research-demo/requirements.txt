@@ -1,0 +1,2 @@
+# Synthetic version inventory. Do not install these versions.
+Werkzeug==3.0.2

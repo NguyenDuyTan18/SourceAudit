@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "builtAt": "2026-11-05T17:01:59.906Z",
+  "sources": [
+    {
+      "url": "https://raw.githubusercontent.com/OWASP/ASVS/v5.0.0_release/5.0/docs_en/OWASP_Application_Security_Verification_Standard_5.0.0_en.flat.json",
+      "sha256": "8201b20eec2908c3380ac600c91c8ba746346fbb808859366abb232027532311",
+      "bytes": 162870,
+      "retrievedAt": "2026-11-05T17:01:44.446Z"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/OWASP/API-Security/33cea37b2ffde3e2e62f6b5d79a029a22a846633/editions/2023/en/0xa1-broken-object-level-authorization.md",
+      "sha256": "f5a827897509a005095c306d05e56b8dc713717a78cb5360a2ba4b3c29bf4b2b",
+      "bytes": 5340,
+      "retrievedAt": "2026-11-05T17:01:44.848Z"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/OWASP/API-Security/33cea37b2ffde3e2e62f6b5d79a029a22a846633/editions/2023/en/0xa2-broken-authentication.md",
+      "sha256": "9c15446740599f7bcf709a406ca5627028793e701dd1798ba711a95e9b933971",
+      "bytes": 5939,
+      "retrievedAt": "2026-11-05T17:01:45.160Z"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/OWASP/API-Security/33cea37b2ffde3e2e62f6b5d79a029a22a846633/editions/2023/en/0xa3-broken-object-property-level-authorization.md",
+      "sha256": "d316b89ee31f4689d4a4fafd1b97b62b7d05ac880945a478991ae4abf64a961d",
+      "bytes": 5904,
+      "retrievedAt": "2026-11-05T17:01:45.521Z"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/OWASP/API-Security/33cea37b2ffde3e2e62f6b5d79a029a22a846633/editions/2023/en/0xa4-unrestricted-resource-consumption.md",
+      "sha256": "8df9df403fd0007bc28bd9a9a60e46739c6797b1f7135c7f0f683a7362f40e38",
+      "bytes": 7447,
+      "retrievedAt": "2026-11-05T17:01:45.821Z"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/OWASP/API-Security/33cea37b2ffde3e2e62f6b5d79a029a22a846633/editions/2023/en/0xa5-broken-function-level-authorization.md",
+      "sha256": "bdaf0f1f0ec6e527c0c30aaca50a7328ed5b3c386bf6ab86e878116f4a3dd808",
+      "bytes": 4858,
+      "retrievedAt": "2026-11-05T17:01:46.204Z"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/OWASP/API-Security/33cea37b2ffde3e2e62f6b5d79a029a22a846633/editions/2023/en/0xa6-unrestricted-access-to-sensitive-business-flows.md",
+      "sha256": "b499f299f634b20557d0f9e335b105d6a738039fe5436b3eb09fe7f74ce63a27",
+      "bytes": 5129,
+      "retrievedAt": "2026-11-05T17:01:46.568Z"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/OWASP/API-Security/33cea37b2ffde3e2e62f6b5d79a029a22a846633/editions/2023/en/0xa7-server-side-request-forgery.md",
+      "sha256": "f1abf2f9d55a0b50a2004e44bc2ea95348c41452197bc5d1bc7dd71b70f52e6c",
+      "bytes": 5818,
+      "retrievedAt": "2026-11-05T17:01:47.092Z"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/OWASP/API-Security/33cea37b2ffde3e2e62f6b5d79a029a22a846633/editions/2023/en/0xa8-security-misconfiguration.md",
+      "sha256": "13b9629746921f2ccd6fac1364cdfbb50f10d7b11faf668589d9994716c333de",
+      "bytes": 6524,
+      "retrievedAt": "2026-11-05T17:01:47.447Z"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/OWASP/API-Security/33cea37b2ffde3e2e62f6b5d79a029a22a846633/editions/2023/en/0xa9-improper-inventory-management.md",
+      "sha256": "8d5d7e6130fac2b28f5808508d4f90683d99ae5a37f9d3d0d9714c853c39ca4f",
+      "bytes": 6122,
+      "retrievedAt": "2026-11-05T17:01:47.870Z"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/OWASP/API-Security/33cea37b2ffde3e2e62f6b5d79a029a22a846633/editions/2023/en/0xaa-unsafe-consumption-of-apis.md",
+      "sha256": "b5fe9034253ca2d7f7c4c9ef0a6db2b71da1689490911a5bb1f5aad2cab78706",
+      "bytes": 4989,
+      "retrievedAt": "2026-11-05T17:01:48.357Z"
+    },
+    {
+      "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+      "sha256": "273b7e449828f0af92e012bf03270a6a6c3deb21dc7a50b46ebe0447ea196bff",
+      "bytes": 1830574,
+      "retrievedAt": "2026-11-05T17:01:48.683Z"
+    },
+    {
+      "url": "https://api.github.com/advisories?type=reviewed&ecosystem=npm&per_page=100&sort=updated&direction=desc&affects%5B%5D=next&affects%5B%5D=lodash&affects%5B%5D=axios&affects%5B%5D=express&affects%5B%5D=ejs&affects%5B%5D=jsonwebtoken&affects%5B%5D=dompurify&affects%5B%5D=jquery&affects%5B%5D=handlebars&affects%5B%5D=qs&affects%5B%5D=multer&affects%5B%5D=vite&affects%5B%5D=webpack&affects%5B%5D=path-to-regexp&affects%5B%5D=react-router&affects%5B%5D=fastify&affects%5B%5D=pug&affects%5B%5D=underscore&affects%5B%5D=sanitize-html",
+      "sha256": "bc4b70f5cf163023c9b367c5afe63ec290f79d9607e7e27aaceff07b7e733001",
+      "bytes": 768768,
+      "retrievedAt": "2026-11-05T17:01:50.114Z"
+    },
+    {
+      "url": "https://api.github.com/advisories?type=reviewed&ecosystem=npm&per_page=100&sort=updated&direction=desc&affects%5B%5D=next&affects%5B%5D=lodash&affects%5B%5D=axios&affects%5B%5D=express&affects%5B%5D=ejs&affects%5B%5D=jsonwebtoken&affects%5B%5D=dompurify&affects%5B%5D=jquery&affects%5B%5D=handlebars&affects%5B%5D=qs&affects%5B%5D=multer&affects%5B%5D=vite&affects%5B%5D=webpack&affects%5B%5D=path-to-regexp&affects%5B%5D=react-router&affects%5B%5D=fastify&affects%5B%5D=pug&affects%5B%5D=underscore&affects%5B%5D=sanitize-html&after=Y3Vyc29yOnYyOpK0MjAyNi0wNy0yM1QxOTozNTo1OVrOAAX51g%3D%3D",
+      "sha256": "7c673bf1e7f600f7af64765b74d79d2bf1e687f1e4bd96f35793bd1dd3117afc",
+      "bytes": 754092,
+      "retrievedAt": "2026-11-05T17:01:51.149Z"
+    },
+    {
+      "url": "https://api.github.com/advisories?type=reviewed&ecosystem=npm&per_page=100&sort=updated&direction=desc&affects%5B%5D=next&affects%5B%5D=lodash&affects%5B%5D=axios&affects%5B%5D=express&affects%5B%5D=ejs&affects%5B%5D=jsonwebtoken&affects%5B%5D=dompurify&affects%5B%5D=jquery&affects%5B%5D=handlebars&affects%5B%5D=qs&affects%5B%5D=multer&affects%5B%5D=vite&affects%5B%5D=webpack&affects%5B%5D=path-to-regexp&affects%5B%5D=react-router&affects%5B%5D=fastify&affects%5B%5D=pug&affects%5B%5D=underscore&affects%5B%5D=sanitize-html&after=Y3Vyc29yOnYyOpK0MjAyNi0wMy0yNVQxODo1MToyMFrOAAU8AA%3D%3D",
+      "sha256": "87f52260bca844cbd5f33055b8a0a864eadb8f1b4c0c6aedfc6295275c983df9",
+      "bytes": 565516,
+      "retrievedAt": "2026-11-05T17:01:52.374Z"
+    },
+    {
+      "url": "https://api.github.com/advisories?type=reviewed&ecosystem=pip&per_page=100&sort=updated&direction=desc&affects%5B%5D=django&affects%5B%5D=flask&affects%5B%5D=werkzeug&affects%5B%5D=requests&affects%5B%5D=urllib3&affects%5B%5D=jinja2&affects%5B%5D=pyyaml&affects%5B%5D=starlette&affects%5B%5D=fastapi&affects%5B%5D=aiohttp&affects%5B%5D=pillow&affects%5B%5D=cryptography&affects%5B%5D=python-jose&affects%5B%5D=pyjwt&affects%5B%5D=sqlparse",
+      "sha256": "1fc04cde3d8a50bd0a0daf1ee27a7244577ae2ba17b5cb657210c72964821155",
+      "bytes": 1032777,
+      "retrievedAt": "2026-11-05T17:01:54.077Z"
+    },
+    {
+      "url": "https://api.github.com/advisories?type=reviewed&ecosystem=pip&per_page=100&sort=updated&direction=desc&affects%5B%5D=django&affects%5B%5D=flask&affects%5B%5D=werkzeug&affects%5B%5D=requests&affects%5B%5D=urllib3&affects%5B%5D=jinja2&affects%5B%5D=pyyaml&affects%5B%5D=starlette&affects%5B%5D=fastapi&affects%5B%5D=aiohttp&affects%5B%5D=pillow&affects%5B%5D=cryptography&affects%5B%5D=python-jose&affects%5B%5D=pyjwt&affects%5B%5D=sqlparse&after=Y3Vyc29yOnYyOpK0MjAyNi0wNy0yMFQyMzoxOTowMVrOAAXEWw%3D%3D",
+      "sha256": "fc2d2780aa047b1208a42af1e382cf959d949eb944d6359cd5a56d4cc17b1fe6",
+      "bytes": 487658,
+      "retrievedAt": "2026-11-05T17:01:54.832Z"
+    },
+    {
+      "url": "https://api.github.com/advisories?type=reviewed&ecosystem=pip&per_page=100&sort=updated&direction=desc&affects%5B%5D=django&affects%5B%5D=flask&affects%5B%5D=werkzeug&affects%5B%5D=requests&affects%5B%5D=urllib3&affects%5B%5D=jinja2&affects%5B%5D=pyyaml&affects%5B%5D=starlette&affects%5B%5D=fastapi&affects%5B%5D=aiohttp&affects%5B%5D=pillow&affects%5B%5D=cryptography&affects%5B%5D=python-jose&affects%5B%5D=pyjwt&affects%5B%5D=sqlparse&after=Y3Vyc29yOnYyOpK0MjAyNi0wMS0wNlQxNjowNjo1MVrOAAULSg%3D%3D",
+      "sha256": "48c74671aee68ec510719ad349a08a426e27a11426beb25b241d2b5ca5dcb7f7",
+      "bytes": 396568,
+      "retrievedAt": "2026-11-05T17:01:55.519Z"
+    },
+    {
+      "url": "https://api.github.com/advisories?type=reviewed&ecosystem=composer&per_page=100&sort=updated&direction=desc&affects%5B%5D=laravel%2Fframework&affects%5B%5D=symfony%2Fhttp-foundation&affects%5B%5D=symfony%2Fhttp-kernel&affects%5B%5D=twig%2Ftwig&affects%5B%5D=guzzlehttp%2Fguzzle&affects%5B%5D=league%2Fcommonmark",
+      "sha256": "bcebe49d4f867404a16f963e5cad09bd5d8d6ed621205972e616c830bd974db6",
+      "bytes": 464115,
+      "retrievedAt": "2026-11-05T17:01:56.242Z"
+    },
+    {
+      "url": "https://api.github.com/advisories?type=reviewed&ecosystem=composer&per_page=100&sort=updated&direction=desc&affects%5B%5D=laravel%2Fframework&affects%5B%5D=symfony%2Fhttp-foundation&affects%5B%5D=symfony%2Fhttp-kernel&affects%5B%5D=twig%2Ftwig&affects%5B%5D=guzzlehttp%2Fguzzle&affects%5B%5D=league%2Fcommonmark&after=Y3Vyc29yOnYyOpK0MjAyNC0wMi0wMVQwNTowNzoxM1rNBxc%3D",
+      "sha256": "1c777373b8b9b6080bfe2c2d1991dc626406b70d83c83e7f775526126c25dda9",
+      "bytes": 40645,
+      "retrievedAt": "2026-11-05T17:01:56.752Z"
+    },
+    {
+      "url": "https://api.github.com/advisories?type=reviewed&ecosystem=maven&per_page=100&sort=updated&direction=desc&affects%5B%5D=org.springframework%3Aspring-web&affects%5B%5D=org.springframework%3Aspring-webmvc&affects%5B%5D=org.apache.tomcat.embed%3Atomcat-embed-core&affects%5B%5D=com.fasterxml.jackson.core%3Ajackson-databind",
+      "sha256": "53c82b28d476a05bc4a943c17b2733ed7afb8ead099389fdbf6a26f091986119",
+      "bytes": 596288,
+      "retrievedAt": "2026-11-05T17:01:57.518Z"
+    },
+    {
+      "url": "https://api.github.com/advisories?type=reviewed&ecosystem=nuget&per_page=100&sort=updated&direction=desc&affects%5B%5D=Microsoft.AspNetCore.App&affects%5B%5D=System.Text.Json&affects%5B%5D=Newtonsoft.Json",
+      "sha256": "50fcbd48fb0f19434351a3ebaf65f2e3dd984f1bba8d753c0b5b67f3a5a31844",
+      "bytes": 57692,
+      "retrievedAt": "2026-11-05T17:01:58.006Z"
+    },
+    {
+      "url": "https://api.github.com/advisories?type=reviewed&ecosystem=rubygems&per_page=100&sort=updated&direction=desc&affects%5B%5D=rails&affects%5B%5D=actionpack&affects%5B%5D=rack&affects%5B%5D=nokogiri",
+      "sha256": "93de1265fdcb17ea3e71fa122eb6fc6242ad6322f2715282f9b977cc05d6a3e7",
+      "bytes": 456525,
+      "retrievedAt": "2026-11-05T17:01:59.140Z"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/OWASP/ASVS/v5.0.0_release/LICENSE.md",
+      "sha256": "28a9529c7d0bb4dc51f4bf5c116a3d16ef247a052f7591466768ddf563fd1cf5",
+      "bytes": 20138,
+      "retrievedAt": "2026-11-05T17:01:59.503Z"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/OWASP/API-Security/33cea37b2ffde3e2e62f6b5d79a029a22a846633/LICENSE",
+      "sha256": "9cff5eeb59f0a5f06d7cbe4c2435e7bbbce4edaab1d97b66324104f60a527cb7",
+      "bytes": 15883,
+      "retrievedAt": "2026-11-05T17:01:59.904Z"
+    }
+  ],
+  "errors": [],
+  "asvsVersion": "5.0.0",
+  "apiVersion": "2023",
+  "apiCommit": "33cea37b2ffde3e2e62f6b5d79a029a22a846633",
+  "kevVersion": "2026.11.04",
+  "asvs": 345,
+  "api": 33,
+  "kev": 1768,
+  "advisories": 891,
+  "selection": "ASVS v5.0.0 requirements; API Security 2023 risks/scenarios at pinned commit; CISA KEV full public catalog; bounded reviewed advisories for a fixed public package allowlist. No private project inventory is transmitted."
+}
