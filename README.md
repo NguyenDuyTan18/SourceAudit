@@ -5,7 +5,7 @@
 ![Node.js](https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white)
 ![Semgrep CE](https://img.shields.io/badge/Semgrep%20CE-1.184.0-1B2F3A)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
-![Status](https://img.shields.io/badge/status-private-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
 
 ## Mục lục
 
@@ -322,6 +322,8 @@ Chi tiết: [docs/testing/semgrep.tdd.md](docs/testing/semgrep.tdd.md).
 
 ## Giấy phép và nguồn tham khảo
 
+- Mã nguồn phát hành theo giấy phép [MIT](LICENSE)
+- Báo cáo lỗ hổng: [SECURITY.md](SECURITY.md)
 - Nguồn tham khảo: [SOURCES.md](SOURCES.md)
 - Nguồn và giấy phép dữ liệu: [data/README.md](data/README.md), [data/NOTICE.md](data/NOTICE.md)
 - Danh mục quy tắc: [docs/RULES.md](docs/RULES.md)
