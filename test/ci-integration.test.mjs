@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, mkdir, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, mkdir, readFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -234,6 +234,27 @@ test('--diff scans only files changed since the merge base, including untracked 
   assert.equal(result.status, 1, result.stderr);
   const sarif = JSON.parse(await readFile(path.join(out, 'report.sarif'), 'utf8'));
   assert.deepEqual([...new Set(sarif.runs[0].results.map((r) => r.locations[0].physicalLocation.artifactLocation.uri))], ['new.js']);
+});
+
+test('--diff finds changes when the scan path crosses a directory alias', { skip: !hasGit && 'git không có trên PATH' }, async (t) => {
+  const root = await fixture(t);
+  const target = path.join(root, 'real');
+  const alias = path.join(root, 'alias');
+  await mkdir(path.join(target, 'repo'), { recursive: true });
+  await symlink(target, alias, process.platform === 'win32' ? 'junction' : 'dir');
+  const realRepo = path.join(target, 'repo');
+  const aliasedRepo = path.join(alias, 'repo');
+  const run = (...args) => assert.equal(git(realRepo, ...args).status, 0, args.join(' '));
+  run('init', '-q', '-b', 'main');
+  run('-c', 'user.email=t@example.invalid', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'root');
+  await writeFile(path.join(realRepo, 'new.js'), 'eval(req.query.fresh);');
+
+  const diff = await changedFiles(realRepo, 'main');
+  const fromAlias = await changedFiles(aliasedRepo, 'main');
+  assert.deepEqual(fromAlias.files, diff.files);
+  const report = await scanSource(aliasedRepo, { onlyFiles: diff.files });
+  assert.equal(report.stats.filesScanned, 1);
+  assert.deepEqual(report.findings.map(({ location }) => location.file), ['new.js']);
 });
 
 test('CLI writes SARIF and --baseline turns a failing scan into a passing one', async (t) => {

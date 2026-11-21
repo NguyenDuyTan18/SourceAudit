@@ -17,12 +17,12 @@ jobs:
   srcaudit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0 # --diff cần lịch sử để tính merge-base
           persist-credentials: false
 
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           repository: NguyenDuyTan18/SourceAudit
           # Chọn commit SrcAudit đã kiểm tra trước khi đưa mẫu này vào CI.
@@ -33,7 +33,7 @@ jobs:
       # Chuyển công cụ ra ngoài workspace để không quét chính mã mẫu của SrcAudit.
       - run: mv .srcaudit-tool "$RUNNER_TEMP/srcaudit"
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
 

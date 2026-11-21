@@ -1,4 +1,4 @@
-import { lstat, readdir, readFile } from 'node:fs/promises';
+import { lstat, readdir, readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { createReport, finishReport, SEVERITIES } from './report.mjs';
 import { EXTENDED_RULES } from './extended-rules.mjs';
@@ -106,6 +106,8 @@ export async function scanSource(input, options = {}) {
   const excluded = new Set((options.excludePaths ?? []).map((p) => path.resolve(p)));
   const useGitignore = options.gitignore !== false;
   const onlyFiles = options.onlyFiles;
+  // Git can return canonical paths while the caller selected a directory through an alias.
+  const canonicalBase = onlyFiles ? await realpath(base) : base;
   const linesByFile = new Map();
   const suppressionsByFile = new Map();
   const dependencyFiles = new Set();
@@ -153,7 +155,10 @@ export async function scanSource(input, options = {}) {
     const testPath = rootStat.isFile() ? `${path.basename(base)}/${relative}` : relative;
     if (!options.includeTests && isTestPath(testPath)) { report.stats.filesSkipped++; return; }
     if (useGitignore && isIgnored(ignoreStack, relative, false)) { report.stats.gitignore.ignored++; return; }
-    if (onlyFiles && !onlyFiles.has(pathKey(absolute))) { report.stats.diff.unchanged++; return; }
+    if (onlyFiles && !onlyFiles.has(pathKey(absolute)) && !onlyFiles.has(pathKey(path.join(canonicalBase, relative)))) {
+      report.stats.diff.unchanged++;
+      return;
+    }
     const ext = path.extname(absolute).toLowerCase();
     const name = path.basename(absolute);
     const language = deep ? semgrepLanguage(absolute.split(path.sep).join('/')) : undefined;

@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { lstat } from 'node:fs/promises';
+import { lstat, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
@@ -33,7 +33,7 @@ export async function changedFiles(target, ref) {
   if (typeof ref !== 'string' || !REF.test(ref) || ref.includes('..') || ref.endsWith('.lock')) throw new DiffError('--diff nhận một tên nhánh, tag hoặc commit hợp lệ, ví dụ origin/main.');
   const resolved = path.resolve(target);
   const cwd = (await lstat(resolved)).isDirectory() ? resolved : path.dirname(resolved);
-  const top = (await git(cwd, ['rev-parse', '--show-toplevel'])).trim();
+  const top = await realpath((await git(cwd, ['rev-parse', '--show-toplevel'])).trim());
   const base = (await git(cwd, ['merge-base', '--end-of-options', ref, 'HEAD'])).trim();
   if (!/^[0-9a-f]{40,64}$/.test(base)) throw new DiffError('Không xác định được merge-base cho --diff.');
   const tracked = await git(top, ['diff', '--name-only', '-z', '--no-renames', '--diff-filter=ACMRT', base, '--']);
