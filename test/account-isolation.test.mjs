@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -12,8 +12,8 @@ const ownerPassword = 'synthetic owner password';
 const memberPassword = 'synthetic member password';
 const payload = (code) => ({ upload: { archive: { content: Buffer.from(zipSync({ 'app.js': strToU8(code) })).toString('base64') } } });
 
-async function start(rootDir) {
-  const server = createUiServer({ rootDir, accountFile: path.join(rootDir, '.scanner-auth', 'owner.json'), reportRetentionMs: 0 });
+async function start(rootDir, options = {}) {
+  const server = createUiServer({ rootDir, accountFile: path.join(rootDir, '.scanner-auth', 'owner.json'), reportRetentionMs: 0, ...options });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   const origin = 'http://127.0.0.1:' + server.address().port;
@@ -47,14 +47,45 @@ async function scan(user, code) {
   const response = await user.post('/api/upload', payload(code));
   assert.equal(response.status, 202);
   const { id } = await response.json();
+  return { id, job: await finishedJob(user, id) };
+}
+
+async function finishedJob(user, id) {
   for (let i = 0; i < 200; i++) {
     const job = await (await user.get(`/api/jobs/${id}`)).json();
-    if (job.status === 'done') return { id, job };
+    if (job.status === 'done') return job;
     assert.notEqual(job.status, 'failed', job.error);
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
   throw new Error('scan did not finish');
 }
+
+test('a saved upload resumes after restart, releases the archive, and respects the account quota', async (t) => {
+  const rootDir = await mkdtemp(path.join(tmpdir(), 'scanner-recovery-'));
+  let ui = await start(rootDir);
+  t.after(async () => { await ui.close(); await rm(rootDir, { recursive: true, force: true }); });
+  await ui.register('owner', ownerPassword);
+  await ui.close();
+
+  const id = randomUUID();
+  const directory = path.join(rootDir, '.scanner-reports', 'user-owner', id);
+  const input = path.join(directory, 'input.json');
+  await mkdir(directory, { recursive: true });
+  const job = { id, ownerId: 'owner', mode: 'upload', status: 'queued', sourceAnalysis: 'quick', startedAt: new Date().toISOString(), label: 'recover.zip' };
+  await writeFile(input, JSON.stringify({ job, content: payload('const value = 1;').upload.archive.content }));
+  ui = await start(rootDir, { accountStorageBytes: 40_000 });
+  const owner = await ui.client(await ui.login('owner', ownerPassword));
+  const recovered = await finishedJob(owner, id);
+  assert.equal(recovered.report.target, 'Upload: recover.zip');
+  await assert.rejects(access(input), { code: 'ENOENT' });
+  await assert.rejects(access(path.join(directory, 'work')), { code: 'ENOENT' });
+
+  await writeFile(path.join(directory, 'report.txt'), 'x'.repeat(40_000));
+  assert.equal((await owner.post('/api/upload', payload('const value = 2;'))).status, 413);
+  assert.equal((await owner.post('/api/jobs/' + id + '/delete', {})).status, 200);
+  assert.equal((await owner.get('/api/jobs/' + id)).status, 404);
+  assert.equal((await scan(owner, 'const value = 2;')).job.report.status, 'complete');
+});
 
 test('each account sees only its own scans, across restarts and after account removal', async (t) => {
   const rootDir = await mkdtemp(path.join(tmpdir(), 'scanner-isolation-'));
@@ -79,8 +110,12 @@ test('each account sees only its own scans, across restarts and after account re
   assert.equal((await member.get('/api/users')).status, 403);
   assert.equal((await member.post('/api/users', { username: 'intruder', password: memberPassword })).status, 403);
 
+  const privateReference = 'https://example.test/private-command-note';
+  assert.equal((await owner.post('/api/writeups', { text: 'command injection ' + privateReference })).status, 200);
   const ownerScan = await scan(owner, 'eval(req.query.owner);');
   const memberScan = await scan(member, 'eval(req.query.member);');
+  assert.ok(JSON.stringify(ownerScan.job.report).includes(privateReference));
+  assert.ok(!JSON.stringify(memberScan.job.report).includes(privateReference));
 
   // History is filtered by the session's account.
   assert.deepEqual((await (await owner.get('/api/history')).json()).map((job) => job.id), [ownerScan.id]);
@@ -136,6 +171,13 @@ test('one account cannot queue a second scan while its first is pending', async 
   const origin = 'http://127.0.0.1:' + server.address().port;
   const token = (await (await fetch(origin)).text()).match(/name="session-token" content="([a-f0-9]+)"/)[1];
   const post = (data) => fetch(origin + '/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Session-Token': token, Origin: origin }, body: JSON.stringify(data) });
-  assert.equal((await post({ ...payload('eval(x)'), sourceAnalysis: 'deep' })).status, 202);
+  const queued = await post({ ...payload('eval(x)'), sourceAnalysis: 'deep' });
+  assert.equal(queued.status, 202);
+  const { id } = await queued.json();
+  const saved = JSON.parse(await readFile(path.join(rootDir, '.scanner-reports', 'user-local', id, 'input.json'), 'utf8'));
+  assert.equal(saved.job.id, id);
+  assert.equal(saved.job.status, 'queued');
   assert.equal((await post(payload('eval(y)'))).status, 409);
+  release();
+  await finishedJob({ get: (route) => fetch(origin + route, { headers: { 'X-Session-Token': token } }) }, id);
 });

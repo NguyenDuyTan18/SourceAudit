@@ -31,6 +31,29 @@ const csharp = (body) => [
 
 const pair = (ext, name, cwe, sink, vulnerable, fixed) => ({ ext, name, cwe, sink, vulnerable, fixed });
 
+const flask = (imports, body) => ['from flask import request as incoming', imports, '', 'def route():', body].join('\n');
+
+export const requestCoverageCases = [
+  pair('py', 'flask-header-redirect', 'CWE-601', 'target',
+    flask('from flask import redirect', '    target = incoming.headers.get("X-Return-Page")\n    return redirect(target)'),
+    flask('from flask import redirect', '    key = incoming.headers.get("X-Return-Page")\n    routes = {"home": "/", "help": "/help"}\n    return redirect(routes[key])')),
+  pair('py', 'flask-values-file', 'CWE-22', 'selected',
+    flask('from flask import send_file', '    selected = incoming.values["report"]\n    return send_file(selected)'),
+    flask('from flask import send_from_directory', '    selected = incoming.values["report"]\n    return send_from_directory("/srv/reports", selected)')),
+  pair('py', 'flask-cookie-dynamic-code', 'CWE-95', 'expression',
+    flask('import json', '    expression = incoming.cookies.get("formula")\n    return eval(expression)'),
+    flask('import json', '    expression = incoming.cookies.get("formula")\n    return json.loads(expression)')),
+  pair('py', 'flask-xpath-expression', 'CWE-643', 'query',
+    flask('from lxml import etree', '    query = incoming.args.get("expression")\n    return etree.XPath(query)'),
+    flask('from lxml import etree', '    return etree.XPath("/items/item[@id=$id]")')),
+  pair('java', 'servlet-parameters-file', 'CWE-22', 'selected',
+    java('    var selected = java.nio.file.Path.of(request.getParameter("file"));\n    java.nio.file.Files.readAllBytes(selected);'),
+    java('    var selected = java.nio.file.Path.of("/srv/reports/summary.txt");\n    java.nio.file.Files.readAllBytes(selected);')),
+  pair('java', 'servlet-query-html-response', 'CWE-79', 'message',
+    java('    response.setContentType("text/html");\n    var message = request.getQueryString();\n    response.getWriter().println(message);', 'jakarta.servlet.http.HttpServletResponse response'),
+    java('    response.setContentType("text/plain");\n    var message = request.getQueryString();\n    response.getWriter().println(message);', 'jakarta.servlet.http.HttpServletResponse response')),
+];
+
 export const multilangCases = [
   pair('py', 'python-sql', 'CWE-89', 'sql',
     python('import sqlite3', '    user = request.args["id"]\n    sql = "SELECT * FROM users WHERE id=" + user\n    cursor.execute(sql)'),

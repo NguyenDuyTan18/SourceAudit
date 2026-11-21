@@ -1,0 +1,385 @@
+{
+  "internal:quick": {
+    "overall": {
+      "detected": 28,
+      "falsePositives": 1,
+      "tpr": 0.3011,
+      "fpr": 0.0108,
+      "score": 0.2903
+    }
+  },
+  "owasp-java:quick": {
+    "overall": {
+      "tp": 241,
+      "fp": 206,
+      "fn": 1174,
+      "tn": 1119,
+      "tpr": 0.1703,
+      "fpr": 0.1555,
+      "precision": 0.5391,
+      "score": -0.0002
+    },
+    "categories": {
+      "cmdi": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      },
+      "crypto": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      },
+      "hash": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      },
+      "ldapi": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      },
+      "pathtraver": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      },
+      "securecookie": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      },
+      "sqli": {
+        "score": -0.0019,
+        "tpr": 0.886,
+        "fpr": 0.8879
+      },
+      "trustbound": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      },
+      "weakrand": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      },
+      "xpathi": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      },
+      "xss": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      }
+    }
+  },
+  "owasp-python:quick": {
+    "overall": {
+      "tp": 239,
+      "fp": 52,
+      "fn": 213,
+      "tn": 726,
+      "tpr": 0.5288,
+      "fpr": 0.0668,
+      "precision": 0.8213,
+      "score": 0.2289
+    },
+    "categories": {
+      "cmdi": {
+        "score": -0.4615,
+        "tpr": 0.5385,
+        "fpr": 1
+      },
+      "codeinj": {
+        "score": 0,
+        "tpr": 1,
+        "fpr": 1
+      },
+      "deserialization": {
+        "score": 0.6667,
+        "tpr": 1,
+        "fpr": 0.3333
+      },
+      "hash": {
+        "score": 1,
+        "tpr": 1,
+        "fpr": 0
+      },
+      "ldapi": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      },
+      "pathtraver": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      },
+      "redirect": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      },
+      "securecookie": {
+        "score": 1,
+        "tpr": 1,
+        "fpr": 0
+      },
+      "sqli": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      },
+      "trustbound": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      },
+      "weakrand": {
+        "score": 1,
+        "tpr": 1,
+        "fpr": 0
+      },
+      "xpathi": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      },
+      "xss": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      },
+      "xxe": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      }
+    }
+  },
+  "clean-js:quick": {
+    "overall": {
+      "findings": 0,
+      "perKloc": 0,
+      "actionable": 0,
+      "actionablePerKloc": 0
+    }
+  },
+  "clean-py:quick": {
+    "overall": {
+      "findings": 4,
+      "perKloc": 0.25,
+      "actionable": 3,
+      "actionablePerKloc": 0.187
+    }
+  },
+  "internal:deep": {
+    "overall": {
+      "detected": 91,
+      "falsePositives": 0,
+      "tpr": 1,
+      "fpr": 0,
+      "score": 1
+    }
+  },
+  "owasp-python:deep": {
+    "overall": {
+      "tp": 283,
+      "fp": 27,
+      "fn": 169,
+      "tn": 751,
+      "tpr": 0.6261,
+      "fpr": 0.0347,
+      "precision": 0.9129,
+      "score": 0.4633
+    },
+    "categories": {
+      "cmdi": {
+        "score": 0.3846,
+        "tpr": 0.3846,
+        "fpr": 0
+      },
+      "codeinj": {
+        "score": 0.1773,
+        "tpr": 0.45,
+        "fpr": 0.2727
+      },
+      "deserialization": {
+        "score": 0.3611,
+        "tpr": 0.3889,
+        "fpr": 0.0278
+      },
+      "hash": {
+        "score": 0.9577,
+        "tpr": 0.9577,
+        "fpr": 0
+      },
+      "ldapi": {
+        "score": 0.5625,
+        "tpr": 0.5625,
+        "fpr": 0
+      },
+      "pathtraver": {
+        "score": 0.2705,
+        "tpr": 0.3385,
+        "fpr": 0.068
+      },
+      "redirect": {
+        "score": 0.4433,
+        "tpr": 0.5385,
+        "fpr": 0.0952
+      },
+      "securecookie": {
+        "score": 1,
+        "tpr": 1,
+        "fpr": 0
+      },
+      "sqli": {
+        "score": 0.2,
+        "tpr": 0.2,
+        "fpr": 0
+      },
+      "trustbound": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      },
+      "weakrand": {
+        "score": 1,
+        "tpr": 1,
+        "fpr": 0
+      },
+      "xpathi": {
+        "score": 0.274,
+        "tpr": 0.3333,
+        "fpr": 0.0593
+      },
+      "xss": {
+        "score": 0.3548,
+        "tpr": 0.3548,
+        "fpr": 0
+      },
+      "xxe": {
+        "score": 0.5,
+        "tpr": 0.5,
+        "fpr": 0
+      }
+    }
+  },
+  "clean-js:deep": {
+    "overall": {
+      "findings": 0,
+      "perKloc": 0,
+      "actionable": 0,
+      "actionablePerKloc": 0
+    }
+  },
+  "clean-py:deep": {
+    "overall": {
+      "findings": 0,
+      "perKloc": 0,
+      "actionable": 0,
+      "actionablePerKloc": 0
+    }
+  },
+  "owasp-java:deep": {
+    "overall": {
+      "tp": 240,
+      "fp": 180,
+      "fn": 1175,
+      "tn": 1145,
+      "tpr": 0.1696,
+      "fpr": 0.1358,
+      "precision": 0.5714,
+      "score": 0.0318
+    },
+    "categories": {
+      "cmdi": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      },
+      "crypto": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      },
+      "hash": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      },
+      "ldapi": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      },
+      "pathtraver": {
+        "score": -0.0865,
+        "tpr": 0.1654,
+        "fpr": 0.2519
+      },
+      "securecookie": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      },
+      "sqli": {
+        "score": 0.0591,
+        "tpr": 0.3824,
+        "fpr": 0.3233
+      },
+      "trustbound": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      },
+      "weakrand": {
+        "score": 0,
+        "tpr": 0,
+        "fpr": 0
+      },
+      "xpathi": {
+        "score": 0.25,
+        "tpr": 0.8,
+        "fpr": 0.55
+      },
+      "xss": {
+        "score": 0.1275,
+        "tpr": 0.4146,
+        "fpr": 0.2871
+      }
+    }
+  },
+  "python-precision:deep": {
+    "overall": {
+      "detected": 8,
+      "falsePositives": 0,
+      "tpr": 1,
+      "fpr": 0,
+      "score": 1
+    }
+  },
+  "python-holdout:deep": {
+    "overall": {
+      "detected": 3,
+      "falsePositives": 0,
+      "tpr": 1,
+      "fpr": 0,
+      "score": 1
+    }
+  },
+  "python-coverage:deep": {
+    "overall": {
+      "detected": 35,
+      "falsePositives": 0,
+      "tpr": 1,
+      "fpr": 0,
+      "score": 1
+    }
+  }
+}

@@ -2,19 +2,14 @@ param([switch]$NoBrowser)
 $ErrorActionPreference = 'Stop'
 $taskRoot = $PSScriptRoot
 $taskSessionFile = Join-Path $taskRoot '.ui-session.json'
-$taskHealthHeaders = @{}
 $taskPublicFile = Join-Path $taskRoot '.ui-public.json'
-if (Test-Path -LiteralPath $taskPublicFile) {
-    $taskPublicConfig = Get-Content -LiteralPath $taskPublicFile -Raw | ConvertFrom-Json
-    $taskBasicBytes = [Text.Encoding]::UTF8.GetBytes($taskPublicConfig.username + ':' + $taskPublicConfig.password)
-    $taskHealthHeaders.Authorization = 'Basic ' + [Convert]::ToBase64String($taskBasicBytes)
-}
+$taskWantsRemote = $env:SRCAUDIT_ENABLE_REMOTE -eq '1'
 function Get-ScannerSession {
     if (Test-Path -LiteralPath $taskSessionFile) {
         try {
             $taskSession = Get-Content -LiteralPath $taskSessionFile -Raw | ConvertFrom-Json
             if ($taskSession.url -match '^http://127\.0\.0\.1:[0-9]+$') {
-                $taskHealth = Invoke-RestMethod -Uri ($taskSession.url + '/api/health') -Headers $taskHealthHeaders -TimeoutSec 1
+                $taskHealth = Invoke-RestMethod -Uri ($taskSession.url + '/api/health') -TimeoutSec 1
                 if ($taskHealth.application -eq 'security-scanner-ui') { return $taskSession }
             }
         } catch { }
@@ -25,11 +20,11 @@ $taskActiveSession = Get-ScannerSession
 if ($taskActiveSession) {
     $taskBackendFiles = @(Get-Item -LiteralPath (Join-Path $taskRoot 'ui.mjs'))
     $taskBackendFiles += @(Get-ChildItem -LiteralPath (Join-Path $taskRoot 'src') -Filter '*.mjs' -File)
-    if (Test-Path -LiteralPath $taskPublicFile) { $taskBackendFiles += Get-Item -LiteralPath $taskPublicFile }
+    if ($taskWantsRemote -and (Test-Path -LiteralPath $taskPublicFile)) { $taskBackendFiles += Get-Item -LiteralPath $taskPublicFile }
     $taskLatestBackend = ($taskBackendFiles | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1).LastWriteTimeUtc
     $taskActiveProcess = Get-Process -Id ([int]$taskActiveSession.pid) -ErrorAction SilentlyContinue
     if (-not $taskActiveProcess -or $taskActiveProcess.ProcessName -ne 'node') { throw 'Khong xac dinh duoc tien trinh SrcAudit. Hay dong ban dang chay roi mo lai.' }
-    if ($taskLatestBackend -gt $taskActiveProcess.StartTime.ToUniversalTime()) {
+    if ($taskLatestBackend -gt $taskActiveProcess.StartTime.ToUniversalTime() -or $taskWantsRemote -ne [bool]$taskActiveSession.publicUrl) {
         $taskListener = [regex]::Escape(([uri]$taskActiveSession.url).Authority)
         $taskListenerPattern = '^\s*TCP\s+' + $taskListener + '\s+0\.0\.0\.0:0\s+\S+\s+' + $taskActiveProcess.Id + '\s*$'
         $taskOwnsListener = netstat.exe -ano -p tcp | Select-String -Pattern $taskListenerPattern -Quiet

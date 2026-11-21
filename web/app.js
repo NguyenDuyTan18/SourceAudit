@@ -1,10 +1,13 @@
+import { isDockerfileName, isTestPath, MAX_SOURCE_FILE_BYTES, MAX_SOURCE_FILES, MAX_SOURCE_TOTAL_BYTES, MAX_ZIP_BYTES, MIB } from '/scan-scope.js';
+
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const token = $('meta[name="session-token"]').content;
 const levels = ['critical', 'high', 'medium', 'low', 'info'];
 const names = { critical: 'Nghiêm trọng', high: 'Cao', medium: 'Trung bình', low: 'Thấp', info: 'Thông tin' };
 const state = { job: null, selected: null, busy: false, ready: false, knowledgePage: 1, knowledgeRequest: 0, folderFiles: [] };
-const uploadLimit = 20 * 1024 * 1024;
+const sourceFileCount = MAX_SOURCE_FILES.toLocaleString('vi-VN');
+$('#zip-limits').textContent = `Tối đa ${sourceFileCount} tệp mã nguồn, ${MAX_SOURCE_FILE_BYTES / MIB} MiB mỗi tệp, ${MAX_SOURCE_TOTAL_BYTES / MIB} MiB tổng cộng và ${MAX_ZIP_BYTES / MIB} MiB mỗi ZIP. Tệp kiểm thử được tự động bỏ qua.`;
 const sourceExtensions = new Set();
 const ignoredFolders = new Set(['node_modules', '.git', '.svn', '.venv', 'venv', 'vendor', 'dist', 'build', 'coverage', '.next', '__pycache__', '.scanner-reports', '.scanner-tools', '.scanner-auth']);
 
@@ -30,7 +33,7 @@ async function api(route, data) {
     const hints = {
       401: 'Phiên đăng nhập đã hết hạn. Hãy tải lại trang và đăng nhập.',
       403: 'Phiên giao diện không hợp lệ. Hãy mở lại SrcAudit hoặc tải lại trang.',
-      413: 'Tệp gửi lên vượt giới hạn. Hãy giảm kích thước ZIP hoặc chọn thư mục nhỏ hơn.',
+      413: body?.error || 'Tệp gửi lên vượt giới hạn. Hãy giảm kích thước ZIP hoặc chọn thư mục nhỏ hơn.',
     };
     throw new Error(hints[response.status] || body?.error || `SrcAudit không xử lý được yêu cầu (HTTP ${response.status}).`);
   }
@@ -66,7 +69,7 @@ function showView(view) {
 function updateSourceAnalysis() {
   const deep = $('#source-analysis').value === 'deep';
   $('#source-analysis-help').textContent = deep
-    ? 'Theo dõi luồng dữ liệu từ request tới API nhạy cảm trong JavaScript, TypeScript, Python, PHP, Java, Go và C#.'
+    ? 'Phân tích mã và cấu hình bằng Semgrep, đồng thời đối chiếu phiên bản dependency.'
     : 'Dò mẫu mã nguồn, cấu hình và phiên bản thư viện.';
   $('#scan-scope').textContent = deep ? 'Semgrep · 8 ngôn ngữ và cấu hình · Xử lý trên máy' : 'Phân tích tĩnh · Xử lý trên máy';
 }
@@ -74,12 +77,12 @@ function updateZipSelection(event) {
   const input = event.currentTarget;
   const file = input.files[0];
   message('');
-  if (file && (!/\.zip$/i.test(file.name) || !file.size || file.size > uploadLimit)) {
-    message('Chọn một tệp .zip có dung lượng tối đa 20 MiB.');
+  if (file && (!/\.zip$/i.test(file.name) || !file.size || file.size > MAX_ZIP_BYTES)) {
+    message(`Chọn một tệp .zip có dung lượng tối đa ${MAX_ZIP_BYTES / MIB} MiB.`);
     input.value = '';
   }
   $('#source-selection').textContent = input.files.length
-    ? file.name + ' · ' + (file.size / (1024 * 1024)).toFixed(2) + ' MiB'
+    ? file.name + ' · ' + (file.size / MIB).toFixed(2) + ' MiB'
     : 'Chưa chọn tệp ZIP.';
 }
 function updateFolderSelection() {
@@ -95,20 +98,20 @@ function updateFolderSelection() {
     for (const file of input.files) {
       const parts = file.webkitRelativePath.split('/');
       if (parts.length < 2 || parts[0] !== root) throw new Error('Chọn một thư mục mã nguồn.');
-      if (parts.slice(0, -1).some((part) => ignoredFolders.has(part.toLowerCase()))) continue;
+      if (isTestPath(file.webkitRelativePath) || parts.slice(0, -1).some((part) => ignoredFolders.has(part.toLowerCase()))) continue;
       const dot = file.name.lastIndexOf('.');
       const knownExtension = dot > 0 && sourceExtensions.has(file.name.slice(dot).toLowerCase());
-      if (!knownExtension && !file.name.startsWith('.env') && file.name !== 'Dockerfile' &&
+      if (!knownExtension && !file.name.startsWith('.env') && !isDockerfileName(file.name) &&
           !/^requirements(?:[.-].*)?\.txt$/i.test(file.name)) continue;
-      if (file.size > 1024 * 1024) throw new Error(`Tệp ${file.webkitRelativePath} vượt giới hạn 1 MiB.`);
+      if (file.size > MAX_SOURCE_FILE_BYTES) throw new Error(`Tệp ${file.webkitRelativePath} vượt giới hạn ${MAX_SOURCE_FILE_BYTES / MIB} MiB.`);
       bytes += file.size;
       files.push(file);
-      if (files.length > 2000 || bytes > uploadLimit) throw new Error('Chọn thư mục có tối đa 2.000 tệp mã nguồn và tổng dung lượng tối đa 20 MiB.');
+      if (files.length > MAX_SOURCE_FILES || bytes > MAX_SOURCE_TOTAL_BYTES) throw new Error(`Chọn thư mục có tối đa ${sourceFileCount} tệp mã nguồn và tổng dung lượng tối đa ${MAX_SOURCE_TOTAL_BYTES / MIB} MiB.`);
     }
     if (!files.length) throw new Error('Thư mục không có tệp mã nguồn được hỗ trợ.');
     state.folderFiles = files;
     const ignored = input.files.length - files.length;
-    $('#source-selection').textContent = `${root} · ${files.length} tệp · ${(bytes / 1024 / 1024).toFixed(2)} MiB` +
+    $('#source-selection').textContent = `${root} · ${files.length} tệp · ${(bytes / MIB).toFixed(2)} MiB` +
       (ignored ? ` · Đã bỏ qua ${ignored} tệp` : '');
   } catch (error) {
     input.value = '';
@@ -135,7 +138,7 @@ async function zipFolder(files) {
     entries[relative] = new Uint8Array(await file.arrayBuffer());
   }
   const archive = new Blob([zipSync(entries, { level: 1 })], { type: 'application/zip' });
-  if (archive.size > uploadLimit) throw new Error('ZIP tạo từ thư mục vượt giới hạn 20 MiB.');
+  if (archive.size > MAX_ZIP_BYTES) throw new Error(`ZIP tạo từ thư mục vượt giới hạn ${MAX_ZIP_BYTES / MIB} MiB.`);
   return archive;
 }
 function fileBase64(file) {
@@ -167,14 +170,19 @@ function renderDetail(finding) {
   container.append(badge, element('h3', '', finding.title));
   const meta = element('div', 'detail-meta');
   meta.append(element('span', 'rule-id', `${finding.ruleId} · ${finding.cwe}`), element('span', '', `Tin cậy: ${names[finding.confidence] || finding.confidence}`), element('span', '', finding.status === 'observed' ? 'Cấu hình đã quan sát' : finding.status === 'version-match' ? 'Khớp phiên bản advisory; chưa xác minh khai thác' : 'Cần kiểm chứng'));
+  const method = finding.advisory ? 'Đối chiếu phiên bản dependency' : {
+    signature: 'Quét theo mẫu', 'text-flow': 'Theo dõi dữ liệu trong lượt quét nhanh',
+    'semgrep-pattern': 'So khớp cấu trúc bằng Semgrep', 'semgrep-taint': 'Theo dõi luồng dữ liệu bằng Semgrep',
+  }[finding.detection?.method];
+  if (method) meta.append(element('span', '', method));
   container.append(meta);
   field(container, 'VỊ TRÍ CẦN KIỂM TRA', locationOf(finding), true);
-  field(container, 'CÁCH KHẮC PHỤC', finding.remediation);
   if (finding.sourceExcerpt) field(container, 'MÃ TẠI VỊ TRÍ PHÁT HIỆN (ĐÃ CHE)', finding.sourceExcerpt, true);
   if (finding.relatedRuleIds?.length) field(container, 'QUY TẮC LIÊN QUAN', finding.relatedRuleIds.join(', '));
   field(container, 'BẰNG CHỨNG', finding.evidence, true);
   field(container, 'TÁC ĐỘNG TIỀM NĂNG', finding.impact);
   if (finding.detection) field(container, 'ĐIỀU KIỆN ÁP DỤNG', finding.detection.condition);
+  field(container, 'CÁCH KHẮC PHỤC', finding.remediation);
   if (finding.trace) {
     const roles = { source: 'Đầu vào', propagation: 'Truyền dữ liệu', sink: 'Điểm sử dụng' };
     field(container, 'DÒNG LIÊN QUAN', finding.trace.map((step) =>
@@ -183,7 +191,7 @@ function renderDetail(finding) {
   if (finding.advisory) {
     field(container, 'CVE / GHSA', `${finding.advisory.cve || 'Chưa có CVE'} · ${finding.advisory.id}`);
     field(container, 'PACKAGE / PHIÊN BẢN / PHẠM VI', `${finding.advisory.ecosystem} ${finding.advisory.package}@${finding.advisory.version}\nẢnh hưởng: ${finding.advisory.affectedRange}\nBản vá theo advisory: ${finding.advisory.fixed || 'Chưa nêu'}`, true);
-    field(container, 'NGỮ CẢNH ADVISORY', finding.advisory.description);
+    if (finding.advisory.description) field(container, 'NGỮ CẢNH ADVISORY', finding.advisory.description);
     if (finding.advisory.kev) field(container, 'CISA KEV — LỊCH SỬ KHAI THÁC CÔNG KHAI', `${finding.advisory.kev.scope}\nNgày được thêm vào catalog: ${finding.advisory.kev.dateAdded}`);
   }
   if (finding.knowledge) {
@@ -210,7 +218,12 @@ function renderFindings() {
   const report = state.job?.report;
   const search = $('#finding-search').value.toLowerCase().trim();
   const severity = $('#severity-filter').value;
-  const findings = (report?.findings || []).filter((finding) => (severity === 'all' || severity === finding.severity) && `${finding.title} ${finding.ruleId} ${finding.cwe} ${locationOf(finding)}`.toLowerCase().includes(search));
+  const kind = $('#finding-kind').value;
+  const findings = (report?.findings || []).filter((finding) => {
+    const group = finding.advisory ? 'dependency' : 'source';
+    const matches = (kind === 'all' || kind === group) && (severity === 'all' || severity === finding.severity);
+    return matches && `${finding.title} ${finding.ruleId} ${finding.cwe} ${locationOf(finding)}`.toLowerCase().includes(search);
+  });
   $('#results-empty').hidden = Boolean(report?.findings.length);
   $('#finding-workspace').hidden = !report?.findings.length;
   if (!report?.findings.length) {
@@ -242,7 +255,10 @@ function renderReport() {
   if (report?.stats.formats) notice.textContent += `\nĐịnh dạng đã đọc: ${Object.entries(report.stats.formats).map(([format, count]) => `${format} (${count})`).join(', ') || 'Chưa có'}. Đọc được định dạng không đồng nghĩa phân tích đầy đủ ngữ nghĩa.`;
   if (report?.stats.dependencyAnalysis) {
     const dep = report.stats.dependencyAnalysis;
-    notice.textContent += `\nDependency: ${dep.packages} phiên bản npm/PyPI được đối chiếu với snapshot ${dep.advisoryCount} advisory; ${dep.unresolved} khai báo không chốt phiên bản trong manifest; ${dep.unsupportedManifests} manifest chưa hỗ trợ so phiên bản. Snapshot không bao phủ toàn bộ CVE.`;
+    const sourceFindings = report.findings.filter(({ advisory }) => !advisory);
+    const sourceRuleCount = new Set(sourceFindings.map(({ ruleId }) => ruleId)).size;
+    notice.textContent += `\nMã và cấu hình: ${sourceFindings.length} phát hiện từ ${sourceRuleCount} quy tắc · Dependency: ${report.findings.length - sourceFindings.length}.`;
+    notice.textContent += `\nDependency: ${dep.packages} phiên bản npm/PyPI/Composer được đối chiếu với snapshot ${dep.advisoryCount} advisory. Có ${dep.unresolved} phiên bản chưa xác định, ${dep.unsupportedManifests} manifest chưa hỗ trợ và ${dep.unassessedRanges ?? 0} khoảng advisory chưa so sánh được.`;
   }
   const engineStatuses = { complete: 'Hoàn tất', partial: 'Một phần', skipped: 'Đã bỏ qua', failed: 'Lỗi' };
   if (report?.stats.sourceAnalysis) {
@@ -251,6 +267,17 @@ function renderReport() {
     const languages = Object.entries(analysis.languages ?? {}).map(([name, counts]) =>
       `${name}: ${counts.scanned}/${counts.selected}`);
     if (languages.length) notice.textContent += '\nTheo ngôn ngữ: ' + languages.join(' · ') + '.';
+    const hmacDigests = analysis.pythonPrecision?.reasons?.['python-hmac-digest-factory'];
+    if (hmacDigests) notice.textContent += `\nNgữ cảnh Python: đã lọc ${hmacDigests} dấu hiệu SHA-1 vì hàm chỉ được dùng làm digest bên trong HMAC của ItsDangerous trong mô-đun.`;
+  } else if (report) {
+    notice.textContent += '\nQuét nhanh dùng các mẫu và luồng dữ liệu cục bộ. Chọn phân tích sâu để kiểm tra cấu trúc và luồng dữ liệu bằng Semgrep.';
+  }
+  if (report?.stats.contextFilter) {
+    const { removed, downgraded } = report.stats.contextFilter;
+    const count = (rules) => Object.values(rules ?? {}).reduce((sum, value) => sum + value, 0);
+    const removedCount = count(removed);
+    const downgradedCount = count(downgraded);
+    if (removedCount || downgradedCount) notice.textContent += `\nTheo ngữ cảnh: ${removedCount} dấu hiệu đã được lọc, ${downgradedCount} dấu hiệu được điều chỉnh mức độ hoặc độ tin cậy.`;
   }
   renderFindings();
 }
@@ -258,7 +285,7 @@ async function watchJob(id) {
   for (;;) {
     const job = await api(`/api/jobs/${id}`);
     if (job.status === 'failed') throw new Error(job.error);
-    if (job.status === 'done') { state.job = job; state.selected = null; $('#finding-search').value = ''; $('#severity-filter').value = 'all'; renderReport(); return; }
+    if (job.status === 'done') { state.job = job; state.selected = null; $('#finding-search').value = ''; $('#severity-filter').value = 'all'; $('#finding-kind').value = 'all'; renderReport(); return; }
     const stage = job.stage || 'Đang kiểm tra mục tiêu…';
     if ($('#scan-stage').textContent !== stage) $('#scan-stage').textContent = stage;
     await new Promise((resolve) => setTimeout(resolve, 600));
@@ -303,7 +330,8 @@ async function renderKnowledge() {
     card.append(element('span', 'rule-id', identifier + (labels.length ? ' · ' + labels.join(' · ') : '')), element('h2', '', entry.name), element('p', '', (entry.description || entry.detection || '').slice(0, 800)));
     if (entry.kind === 'asvs') card.append(element('p', '', `ASVS v5.0.0 · Mức xác minh L${entry.level} · Yêu cầu cần kiểm chứng, không phải kết quả quét.`));
     if (entry.kind === 'kev') card.append(element('p', '', `CISA KEV · Thêm ngày ${entry.dateAdded}. Lịch sử khai thác công khai của CVE không chứng minh mục tiêu local bị khai thác.`));
-    if (entry.kind === 'advisory') card.append(element('p', '', 'Advisory tham khảo; chỉ ghi nhận CVE trên mục tiêu khi khớp package, phiên bản và xem xét điều kiện áp dụng.'));
+    if (entry.publication) card.append(element('p', '', entry.publication));
+    else if (entry.kind === 'advisory') card.append(element('p', '', 'Advisory tham khảo; chỉ ghi nhận CVE trên mục tiêu khi khớp package, phiên bản và xem xét điều kiện áp dụng.'));
     else if (entry.kind) card.append(element('p', '', 'Mục ngữ cảnh; không tương đương một rule đã kiểm thử.'));
     const details = element('details'); details.append(element('summary', '', 'Xem điều kiện, hướng rà soát và nguồn'));
     const steps = entry.reviewSteps || entry.mitigations || (entry.objectives ? [entry.objectives] : ['Đối chiếu điều kiện trong nguồn gốc trước khi kết luận.']);
@@ -325,7 +353,25 @@ async function loadHistory() {
       if (entry.status === 'failed') { message('Lần kiểm tra này chưa hoàn tất. Hãy nhập lại mục tiêu và thử lại.'); return; }
       showView('scan'); setBusy(true);
       try { await watchJob(entry.id); } catch (error) { message(error.message); } finally { setBusy(false); }
-    }); list.append(row);
+    });
+    const item = element('div', 'history-entry');
+    item.append(row);
+    if (entry.status === 'done' || entry.status === 'failed') {
+      const remove = element('button', 'button small', 'Xóa');
+      remove.type = 'button';
+      remove.setAttribute('aria-label', 'Xóa lượt kiểm tra ' + (entry.target || entry.startedAt));
+      remove.addEventListener('click', async () => {
+        if (!window.confirm('Xóa lượt kiểm tra và các báo cáo của lượt này?')) return;
+        remove.disabled = true;
+        try {
+          await api('/api/jobs/' + entry.id + '/delete', {});
+          if (state.job?.id === entry.id) { state.job = null; state.selected = null; renderReport(); }
+          await loadHistory();
+        } catch (error) { message(error.message); remove.disabled = false; }
+      });
+      item.append(remove);
+    }
+    list.append(item);
   }
   if (!entries.length) list.append(element('div', 'panel empty-state', 'Tài khoản của bạn chưa có lần kiểm tra nào.'));
 }
@@ -369,6 +415,7 @@ $('#source-folder').addEventListener('change', updateFolderSelection);
 $('#scan-form').addEventListener('submit', (event) => { event.preventDefault(); void begin(); });
 $('#finding-search').addEventListener('input', renderFindings);
 $('#severity-filter').addEventListener('change', renderFindings);
+$('#finding-kind').addEventListener('change', renderFindings);
 let knowledgeTimer;
 $('#knowledge-search').addEventListener('input', () => { clearTimeout(knowledgeTimer); knowledgeTimer = setTimeout(() => { state.knowledgePage = 1; void renderKnowledge(); }, 250); });
 $('#knowledge-kind').addEventListener('change', () => { state.knowledgePage = 1; void renderKnowledge(); });
@@ -426,7 +473,7 @@ api('/api/bootstrap').then((bootstrap) => {
   updateUploadKind();
   $('#rule-count').textContent = bootstrap.sourceRules.length;
   $('#topic-count').textContent = bootstrap.corpus?.total || bootstrap.knowledge.length;
-  if (bootstrap.corpus) $('#corpus-summary').textContent = `${bootstrap.corpus.cwe} CWE · ${bootstrap.corpus.owasp} WSTG · ${bootstrap.corpus.asvs || 0} yêu cầu ASVS · ${bootstrap.corpus.api || 0} mục API Security · ${bootstrap.corpus.advisories} advisory đã review · ${bootstrap.corpus.kev || 0} KEV.\nTải lúc ${new Date(bootstrap.corpus.builtAt).toLocaleString('vi-VN')}. Quét dùng snapshot tại máy; không gửi source hay danh sách package ra ngoài. Các mục ngữ cảnh không tương đương detector.`;
+  if (bootstrap.corpus) $('#corpus-summary').textContent = `${bootstrap.corpus.cwe} CWE · ${bootstrap.corpus.owasp} WSTG · ${bootstrap.corpus.asvs || 0} yêu cầu ASVS · ${bootstrap.corpus.api || 0} mục API Security · ${bootstrap.corpus.advisories} advisory đã review · ${bootstrap.corpus.kev || 0} KEV · ${bootstrap.corpus.research || 0} bài nghiên cứu · ${bootstrap.corpus.references || 0} tài liệu kỹ thuật.\nSnapshot advisory cập nhật ${new Date(bootstrap.corpus.builtAt).toLocaleString('vi-VN')}. Quét dùng dữ liệu trên máy; nguồn tham khảo hỗ trợ kiểm chứng cảnh báo.`;
   renderKnowledge(); renderReport();
 }).catch((error) => {
   setScanReadiness('error', 'Chưa kết nối');

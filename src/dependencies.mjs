@@ -10,6 +10,36 @@ for (const advisory of CORPUS.advisories) for (const vulnerability of advisory.v
   advisoryIndex.get(key).push({ advisory, vulnerability });
 }
 
+const requirements = /^requirements(?:[.-].*)?\.txt$/i;
+const manifestNames = new Set([
+  'package-lock.json', 'npm-shrinkwrap.json', 'package.json', 'yarn.lock', 'pnpm-lock.yaml',
+  'Pipfile.lock', 'composer.lock', 'Gemfile.lock', 'go.mod', 'pom.xml', 'packages.lock.json', 'poetry.lock',
+]);
+export const isDependencyManifest = (filename) => manifestNames.has(filename) || requirements.test(filename);
+
+function composerStable(version) {
+  if (!/^v?\d{1,9}(?:\.\d{1,9}){0,3}$/.test(version)) return undefined;
+  const parts = version.replace(/^v/, '').split('.').map(Number);
+  return Array.from({ length: 4 }, (_, i) => parts[i] ?? 0);
+}
+
+function matchComposer(version, range) {
+  const installed = composerStable(version);
+  if (!installed) return null;
+  let matches = true;
+  for (const term of range.split(',')) {
+    const match = term.trim().match(/^(<=|>=|==|=|<|>)?\s*(\S+)$/);
+    const limit = match && composerStable(match[2]);
+    if (!limit) return null;
+    const index = installed.findIndex((part, i) => part !== limit[i]);
+    const order = index < 0 ? 0 : installed[index] - limit[index];
+    const [lower, upper, equal] = [order < 0, order > 0, order === 0];
+    const comparisons = { '<': lower, '>': upper, '<=': lower || equal, '>=': upper || equal, '=': equal, '==': equal };
+    matches &&= comparisons[match[1] ?? '='];
+  }
+  return matches;
+}
+
 export function matchVersion(ecosystem, version, range) {
   if (typeof version !== 'string' || typeof range !== 'string' || version.length > 200 || range.length > 2000) return null;
   try {
@@ -22,15 +52,72 @@ export function matchVersion(ecosystem, version, range) {
       if (!pep440.valid(version) || !pep440.validRange(range)) return null;
       return pep440.satisfies(version, range);
     }
+    if (ecosystem === 'composer') return matchComposer(version, range);
   } catch { return null; }
   return null;
+}
+
+const unquote = (value) => value.trim().replace(/^["']|["']$/g, '');
+// `@scope/name@range` → `@scope/name`; also strips Yarn Berry protocols (`name@npm:^1.0.0`).
+const packageName = (spec) => {
+  const at = spec.indexOf('@', spec.startsWith('@') ? 1 : 0);
+  return at > 0 ? spec.slice(0, at) : undefined;
+};
+
+/**
+ * yarn.lock v1 (`version "1.2.3"`) and Yarn Berry v2+ (`version: 1.2.3`).
+ * Each entry header lists one or more specs sharing a resolved version.
+ */
+export function parseYarnLock(text) {
+  const entries = []; let current;
+  for (const [index, raw] of String(text).split(/\r?\n/).entries()) {
+    if (!raw.trim() || raw.trimStart().startsWith('#')) continue;
+    if (!/^\s/.test(raw)) {
+      current = undefined;
+      if (!raw.endsWith(':') || raw.startsWith('__metadata')) continue;
+      const spec = unquote(raw.slice(0, -1).split(/,\s*/)[0]);
+      const protocol = spec.slice((packageName(spec)?.length ?? 0) + 1);
+      current = { name: packageName(spec), local: /^(?:workspace|link|portal|file|exec|git\+?|https?):/.test(protocol) };
+      continue;
+    }
+    const version = current && raw.match(/^\s{2}version:?\s+(.+)$/);
+    if (version) { entries.push({ ...current, version: unquote(version[1]), line: index + 1 }); current = undefined; }
+  }
+  return entries;
+}
+
+/**
+ * pnpm-lock.yaml keys under `packages:` (and `snapshots:` in v9):
+ * v5 `/name/1.2.3_peer`, v6 `/name@1.2.3(peer@1)`, v9 `name@1.2.3`.
+ */
+export function parsePnpmLock(text) {
+  const entries = []; let section;
+  for (const [index, raw] of String(text).split(/\r?\n/).entries()) {
+    if (/^\S/.test(raw)) { section = raw.replace(/:\s*$/, ''); continue; }
+    if (section !== 'packages' && section !== 'snapshots') continue;
+    const header = raw.match(/^ {2}(\S.*):\s*$/);
+    if (!header) continue;
+    // Drop v6/v9 peer suffix `(...)` and v5 peer suffix `/1.2.3_peer@x`.
+    const key = unquote(header[1]).replace(/^\//, '').replace(/\(.*$/, '').replace(/(\/\d[^/_]*)_.*$/, '$1');
+    let name; let version;
+    const at = key.indexOf('@', key.startsWith('@') ? 1 : 0);
+    if (at > 0) { name = key.slice(0, at); version = key.slice(at + 1); }
+    else {
+      const slash = key.lastIndexOf('/');
+      if (slash > 0) { name = key.slice(0, slash); version = key.slice(slash + 1); }
+    }
+    // Tarball, git and file: dependencies carry no registry version.
+    if (!version || /[:/]/.test(version) || /^(?:file|link|git|https?):/.test(key)) { entries.push({ line: index + 1 }); continue; }
+    entries.push({ name, version, line: index + 1 });
+  }
+  return entries;
 }
 
 export function extractDependencies(filename, text) {
   const result = { packages: [], unresolved: 0, unsupported: 0, recognized: true };
   const add = (ecosystem, name, version, pointer) => {
     if (typeof name !== 'string' || typeof version !== 'string' || result.packages.length >= 10000) { result.unresolved++; return; }
-    const valid = ecosystem === 'npm' ? semver.valid(version) : pep440.valid(version);
+    const valid = ecosystem === 'npm' ? semver.valid(version) : ecosystem === 'pip' ? pep440.valid(version) : composerStable(version);
     if (!valid) { result.unresolved++; return; }
     if (!result.packages.some((entry) => entry.ecosystem === ecosystem && entry.name === name && entry.version === version)) result.packages.push({ ecosystem, name, version, pointer });
   };
@@ -53,7 +140,7 @@ export function extractDependencies(filename, text) {
       };
       visit(data.dependencies);
     }
-  } else if (/^requirements(?:[.-].*)?\.txt$/i.test(filename)) {
+  } else if (requirements.test(filename)) {
     for (const [index, line] of text.split(/\r?\n/).entries()) {
       const clean = line.trim(); if (!clean || clean.startsWith('#')) continue;
       const match = clean.match(/^([A-Za-z0-9][A-Za-z0-9._-]*)==([A-Za-z0-9.!+_-]+)(?:\s+#.*)?$/);
@@ -68,7 +155,25 @@ export function extractDependencies(filename, text) {
   } else if (filename === 'package.json') {
     const data = JSON.parse(text);
     result.unresolved = Object.keys(data.dependencies || {}).length + Object.keys(data.devDependencies || {}).length;
-  } else if (['composer.lock', 'Gemfile.lock', 'go.mod', 'pom.xml', 'packages.lock.json', 'poetry.lock', 'yarn.lock', 'pnpm-lock.yaml'].includes(filename)) result.unsupported = 1;
+  } else if (filename === 'yarn.lock') {
+    for (const entry of parseYarnLock(text)) {
+      if (entry.local) continue;
+      if (!entry.name) { result.unresolved++; continue; }
+      add('npm', entry.name, entry.version, `line:${entry.line}`);
+    }
+  } else if (filename === 'pnpm-lock.yaml') {
+    for (const entry of parsePnpmLock(text)) {
+      if (!entry.name) { result.unresolved++; continue; }
+      add('npm', entry.name, entry.version, `line:${entry.line}`);
+    }
+  } else if (filename === 'composer.lock') {
+    const data = JSON.parse(text);
+    if (!Array.isArray(data?.packages) && !Array.isArray(data?.['packages-dev'])) throw new Error('Invalid Composer lockfile');
+    for (const group of ['packages', 'packages-dev']) {
+      if (!Array.isArray(data[group])) continue;
+      for (const [index, entry] of data[group].entries()) add('composer', entry?.name, entry?.version, '/' + group + '/' + index);
+    }
+  } else if (isDependencyManifest(filename)) result.unsupported = 1;
   else result.recognized = false;
   return result;
 }

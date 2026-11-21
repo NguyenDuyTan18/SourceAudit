@@ -1,4 +1,52 @@
 rules:
+  - id: srcaudit-python-weak-random
+    languages: [python]
+    severity: WARNING
+    message: Review whether this pseudorandom value requires a cryptographic generator.
+    pattern-either:
+      - pattern: random.getrandbits(...)
+      - pattern: random.randbytes(...)
+      - pattern: random.random(...)
+      - pattern: random.randint(...)
+      - pattern: random.randrange(...)
+      - pattern: random.choice(...)
+      - pattern: random.choices(...)
+      - pattern: random.sample(...)
+      - pattern: random.shuffle(...)
+      - pattern: random.uniform(...)
+      - pattern: random.normalvariate(...)
+
+  - id: srcaudit-python-weak-hashlib
+    languages: [python]
+    severity: WARNING
+    message: Review use of MD5 or SHA-1 for security-sensitive hashing.
+    patterns:
+      - pattern-either:
+          - patterns:
+              - pattern: hashlib.md5(...)
+              - pattern-not: hashlib.md5(..., usedforsecurity=False, ...)
+          - patterns:
+              - pattern: hashlib.sha1(...)
+              - pattern-not: hashlib.sha1(..., usedforsecurity=False, ...)
+          - patterns:
+              - pattern: hashlib.new($ALGORITHM, ...)
+              - metavariable-regex:
+                  metavariable: $ALGORITHM
+                  regex: "(?i)^(?:'(?:md5|sha1)'|\"(?:md5|sha1)\")$"
+              - pattern-not: hashlib.new(..., usedforsecurity=False, ...)
+
+  - id: srcaudit-python-tempfile-mktemp
+    languages: [python]
+    severity: WARNING
+    message: Allocate the temporary file atomically with NamedTemporaryFile or mkstemp.
+    pattern: tempfile.mktemp(...)
+
+  - id: srcaudit-python-unverified-tls-context
+    languages: [python]
+    severity: WARNING
+    message: Verify the remote certificate and hostname using a default client context.
+    pattern: ssl._create_unverified_context(...)
+
   - id: srcaudit-python-sql-injection
     languages: [python]
     mode: taint
@@ -7,18 +55,26 @@ rules:
     pattern-sources: &python-request
       - exact: true
         pattern-either:
-          - pattern: request.args
-          - pattern: request.form
-          - pattern: request.GET
-          - pattern: request.POST
-          - pattern: request.query_params
-          - pattern: request.body
-          - pattern: request.data
-          - pattern: request.headers
-          - pattern: request.cookies
-          - pattern: request.COOKIES
           - pattern: request.get_json(...)
           - pattern: request.get_data(...)
+          - pattern: flask.request.get_json(...)
+          - pattern: flask.request.get_data(...)
+          - patterns:
+              - pattern-either:
+                  - pattern: request.$FIELD
+                  - pattern: flask.request.$FIELD
+                  - pattern: request.$FIELD[$KEY]
+                  - pattern: flask.request.$FIELD[$KEY]
+                  - patterns:
+                      - pattern-either:
+                          - pattern: request.$FIELD.$GET(...)
+                          - pattern: flask.request.$FIELD.$GET(...)
+                      - metavariable-regex:
+                          metavariable: $GET
+                          regex: '^(get|getlist|get_all|keys|values|items)$'
+              - metavariable-regex:
+                  metavariable: $FIELD
+                  regex: '^(args|form|values|GET|POST|query_params|query_string|body|data|headers|cookies|COOKIES)$'
     pattern-sinks:
       - patterns:
           - pattern-either:
@@ -57,6 +113,207 @@ rules:
               - pattern: pickle.load($DATA, ...)
               - pattern: yaml.unsafe_load($DATA, ...)
           - focus-metavariable: $DATA
+
+  - id: srcaudit-python-flask-open-redirect
+    languages: [python]
+    mode: taint
+    severity: WARNING
+    message: Request input controls the destination of a Flask redirect.
+    options:
+      taint_assume_safe_indexes: true
+    pattern-sources: *python-request
+    pattern-sanitizers:
+      # Match the expression inside assignments as well as inline redirect calls.
+      - exact: false
+        patterns:
+          - pattern: flask.url_for($ENDPOINT, ...)
+          - metavariable-regex:
+              metavariable: $ENDPOINT
+              regex: "^(?:'\\.?[A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)*'|\"\\.?[A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)*\")$"
+          - pattern-not: flask.url_for(..., _external=$EXTERNAL, ...)
+          - pattern-not: flask.url_for(..., _scheme=$SCHEME, ...)
+          - pattern-not: flask.url_for(..., **$VALUES)
+          - pattern-not: flask.url_for(..., *$ARGS, ...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: flask.redirect($TARGET, ...)
+              - pattern: flask.redirect(..., location=$TARGET, ...)
+          - focus-metavariable: $TARGET
+
+  - id: srcaudit-python-flask-html-response
+    languages: [python]
+    mode: taint
+    severity: WARNING
+    message: Request data reaches a Flask HTML response without recognized output escaping.
+    options:
+      taint_assume_safe_indexes: true
+    pattern-sources: *python-request
+    pattern-sanitizers:
+      - exact: true
+        pattern-either:
+          - pattern: markupsafe.escape(...)
+          - pattern: flask.escape(...)
+          - patterns:
+              - pattern: html.escape(...)
+              - pattern-not: html.escape(..., quote=False, ...)
+              - pattern-not: html.escape($TEXT, False)
+      # CE can still propagate taint through an assignment when only the
+      # call node is sanitized. Limit the wider match to a simple argument.
+      - exact: false
+        patterns:
+          - pattern-either:
+              - pattern: markupsafe.escape($TEXT)
+              - pattern: flask.escape($TEXT)
+              - pattern: html.escape($TEXT)
+          - metavariable-regex:
+              metavariable: $TEXT
+              regex: '^[A-Za-z_]\w*$'
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: flask.Response($BODY, ..., mimetype=$TYPE, ...)
+              - pattern: flask.Response(..., response=$BODY, ..., mimetype=$TYPE, ...)
+              - pattern: flask.Response($BODY, ..., content_type=$TYPE, ...)
+              - pattern: flask.Response(..., response=$BODY, ..., content_type=$TYPE, ...)
+          - metavariable-regex:
+              metavariable: $TYPE
+              regex: '(?i)^[''"]text/html(?:\s*;[^''"]*)?[''"]$'
+          - focus-metavariable: $BODY
+      - patterns:
+          - pattern-inside: |
+              @$APP.route(...)
+              def $VIEW(...):
+                  ...
+          - metavariable-regex:
+              metavariable: $APP
+              regex: '^(app|bp|blueprint)$'
+          - pattern-inside: |
+              $BODY = ""
+              ...
+              $BODY += ...
+              ...
+              return $BODY
+          - pattern-not-inside: |
+              $BODY += ...
+              ...
+              $BODY = ...
+              ...
+              return $BODY
+          - pattern: return $BODY
+          - focus-metavariable: $BODY
+
+  - id: srcaudit-python-flask-insecure-cookie
+    languages: [python]
+    severity: WARNING
+    message: A Flask response sets a cookie without the Secure attribute.
+    patterns:
+      - pattern-either:
+          - pattern-inside: |
+              $RESPONSE = flask.make_response(...)
+              ...
+          - pattern-inside: |
+              $RESPONSE = flask.Response(...)
+              ...
+          - pattern-inside: |
+              $RESPONSE = flask.redirect(...)
+              ...
+      - pattern-not: $RESPONSE.set_cookie(..., partitioned=$PARTITIONED, ...)
+      - pattern-either:
+          - patterns:
+              - pattern: $RESPONSE.set_cookie(..., secure=False, ...)
+              - pattern: $RESPONSE.set_cookie(..., secure=$SECURE, ...)
+              - focus-metavariable: $SECURE
+          - patterns:
+              - pattern: $RESPONSE.set_cookie(...)
+              - pattern-not: $RESPONSE.set_cookie(..., secure=$SECURE, ...)
+              - pattern-not: $RESPONSE.set_cookie($KEY, $VALUE, $AGE, $EXPIRES, $PATH, $DOMAIN, $SECURE, ...)
+              - pattern-not: $RESPONSE.set_cookie(..., **$OPTIONS)
+              - pattern-not: $RESPONSE.set_cookie(..., *$ARGS, ...)
+
+  - id: srcaudit-python-sax-external-entities
+    languages: [python]
+    mode: taint
+    severity: ERROR
+    message: Request XML reaches a SAX parser configured to resolve external entities.
+    options:
+      taint_assume_safe_indexes: true
+    pattern-sources: *python-request
+    pattern-sinks:
+      - patterns:
+          - pattern-inside: |
+              $PARSER = xml.sax.make_parser(...)
+              ...
+              $PARSER.setFeature(xml.sax.handler.feature_external_ges, True)
+              ...
+          - pattern-either:
+              - pattern: xml.dom.minidom.parseString($XML, $PARSER, ...)
+              - pattern: xml.dom.minidom.parseString($XML, ..., parser=$PARSER, ...)
+          - pattern-not-inside: |
+              $PARSER.setFeature(xml.sax.handler.feature_external_ges, False)
+              return xml.dom.minidom.parseString(...)
+          - pattern-not-inside: |
+              $PARSER.setFeature(xml.sax.handler.feature_external_ges, False)
+              $RESULT = xml.dom.minidom.parseString(...)
+          - focus-metavariable: $XML
+
+  - id: srcaudit-python-request-file-path
+    languages: [python]
+    mode: taint
+    severity: ERROR
+    message: Request input controls the path passed to a Python file API.
+    options:
+      taint_assume_safe_indexes: true
+    pattern-sources: *python-request
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: open($PATH, ...)
+              - pattern: io.open($PATH, ...)
+              - pattern: codecs.open($PATH, ...)
+              - pattern: flask.send_file($PATH, ...)
+              - pattern: pathlib.Path($PATH, ...).read_text(...)
+              - pattern: pathlib.Path($PATH, ...).read_bytes(...)
+          - focus-metavariable: $PATH
+
+  - id: srcaudit-python-request-dynamic-code
+    languages: [python]
+    mode: taint
+    severity: ERROR
+    message: Request input reaches a Python code evaluation API.
+    options:
+      taint_assume_safe_indexes: true
+    pattern-sources: *python-request
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: eval($CODE, ...)
+              - pattern: exec($CODE, ...)
+          - focus-metavariable: $CODE
+
+  - id: srcaudit-python-lxml-xpath-injection
+    languages: [python]
+    mode: taint
+    severity: ERROR
+    message: Request input controls an lxml XPath expression.
+    options:
+      taint_assume_safe_indexes: true
+    pattern-sources: *python-request
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: lxml.etree.XPath($QUERY, ...)
+              - pattern: lxml.etree.ETXPath($QUERY, ...)
+              - patterns:
+                  - pattern-either:
+                      - pattern-inside: |
+                          import lxml.etree
+                          ...
+                      - pattern-inside: |
+                          from lxml import etree
+                          ...
+                  - pattern: $NODE.xpath($QUERY, ...)
+          - focus-metavariable: $QUERY
 
   - id: srcaudit-php-sql-injection
     languages: [php]
@@ -119,12 +376,17 @@ rules:
           - pattern-either:
               - pattern: $REQ.getParameter(...)
               - pattern: $REQ.getParameterValues(...)
+              - pattern: $REQ.getParameterMap()
               - pattern: $REQ.getHeader(...)
+              - pattern: $REQ.getHeaders(...)
+              - pattern: $REQ.getCookies()
+              - pattern: $REQ.getQueryString()
+              - pattern: $REQ.getPathInfo()
               - pattern: $REQ.getInputStream()
               - pattern: $REQ.getReader()
           - metavariable-regex:
               metavariable: $REQ
-              regex: '^(req|request)$'
+              regex: '^(req|request|httpRequest|servletRequest)$'
     pattern-sinks:
       - patterns:
           - pattern-either:
@@ -137,6 +399,42 @@ rules:
               metavariable: $ST
               regex: '^(st|stmt|statement|conn|connection)$'
           - focus-metavariable: $SQL
+  - id: srcaudit-java-servlet-file-path
+    languages: [java]
+    mode: taint
+    severity: ERROR
+    message: Servlet request input controls the path passed to a Java file API.
+    pattern-sources: *java-request
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: java.nio.file.Files.readAllBytes($PATH)
+              - pattern: java.nio.file.Files.readString($PATH, ...)
+              - pattern: java.nio.file.Files.newInputStream($PATH, ...)
+              - pattern: new java.io.FileInputStream($PATH)
+              - pattern: new java.io.FileReader($PATH, ...)
+          - focus-metavariable: $PATH
+
+  - id: srcaudit-java-servlet-html-response
+    languages: [java]
+    mode: taint
+    severity: WARNING
+    message: Servlet request input is written directly to an HTML response.
+    pattern-sources: *java-request
+    pattern-sinks:
+      - patterns:
+          - pattern-inside: |
+              $RESP.setContentType($TYPE);
+              ...
+          - metavariable-regex:
+              metavariable: $TYPE
+              regex: '^"text/html(?:\s*;[^"]*)?"$'
+          - pattern-either:
+              - pattern: $RESP.getWriter().print($HTML)
+              - pattern: $RESP.getWriter().println($HTML)
+              - pattern: $RESP.getWriter().write($HTML, ...)
+          - focus-metavariable: $HTML
+
   - id: srcaudit-java-command-injection
     languages: [java]
     mode: taint
@@ -276,6 +574,8 @@ rules:
     mode: taint
     severity: ERROR
     message: Request input reaches an LDAP search filter.
+    options:
+      taint_assume_safe_indexes: true
     pattern-sources: *python-request
     pattern-sanitizers:
       - exact: true
@@ -288,18 +588,34 @@ rules:
           - metavariable-regex:
               metavariable: $INPUT
               regex: |-
-                (?x) ^ (?: [A-Za-z_]\w* |
-                  request\.(?:args|form|GET|POST|query_params|cookies|COOKIES|headers)
-                  \[\s*(?:"[^"\r\n]*"|'[^'\r\n]*')\s*\]
+                (?x) ^
+                (?: [A-Za-z_]\w* |
+                  (?:[A-Za-z_]\w*\.){1,2}
+                  (?:args|form|values|GET|POST|query_params|cookies|COOKIES|headers)
+                  (?: \[\s*(?:"[^"\r\n]*"|'[^'\r\n]*')\s*\] |
+                      \.get\(\s*(?:"[^"\r\n]*"|'[^'\r\n]*')\s*
+                        (?:,\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|None)\s*)?\)
+                  )
                 ) $
     pattern-sinks:
       - patterns:
           - pattern-either:
               - pattern: $LDAP.search($BASE, $FILTER, ...)
               - pattern: $LDAP.search(..., search_filter=$FILTER, ...)
-          - metavariable-regex:
-              metavariable: $LDAP
-              regex: '^(ldap|ldap_conn|ldap_connection)$'
+          - pattern-either:
+              - patterns:
+                  - pattern: $LDAP.search(...)
+                  - metavariable-regex:
+                      metavariable: $LDAP
+                      regex: '^(ldap|ldap_conn|ldap_connection)$'
+              - pattern-inside: |
+                  $LDAP = ldap3.Connection(...)
+                  ...
+              - pattern-inside: |
+                  with ldap3.Connection(...) as $LDAP:
+                      ...
+              - pattern: $LDAP.search(..., attributes=ldap3.ALL_ATTRIBUTES, ...)
+              - pattern: $LDAP.search(..., attributes=ldap3.ALL_OPERATIONAL_ATTRIBUTES, ...)
           - focus-metavariable: $FILTER
 
   - id: srcaudit-php-unsafe-deserialization

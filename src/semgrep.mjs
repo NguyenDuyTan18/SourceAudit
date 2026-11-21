@@ -6,6 +6,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { redactedSourceLines, sourceExcerptAt } from './source-excerpt.mjs';
+import { reviewPythonFindings } from './python-precision.mjs';
+import { isDockerfileName } from './scan-scope.mjs';
 
 const execute = promisify(execFile);
 const rulePaths = ['semgrep-js-ts.yml', 'semgrep-multilang.yml', 'semgrep-framework-config.yml'].map((name) =>
@@ -79,6 +81,22 @@ const command = ['CWE-78', 'Dữ liệu request điều khiển lệnh hoặc ch
 const deserialization = ['CWE-502', 'Dữ liệu request đi vào bộ giải tuần tự đối tượng', 'high',
   'Dùng định dạng dữ liệu như JSON và kiểm tra schema. Tránh khôi phục đối tượng từ dữ liệu không tin cậy.'];
 const additionalRules = {
+  'srcaudit-python-flask-open-redirect': ['CWE-601', 'Dữ liệu request điều khiển đích chuyển hướng của Flask', 'medium',
+    'Ánh xạ lựa chọn sang đường dẫn cố định. Xác minh origin và đích nếu cho phép chuyển hướng ra ngoài.'],
+  'srcaudit-python-flask-html-response': ['CWE-79', 'Dữ liệu request đi thẳng vào phản hồi HTML của Flask', 'medium',
+    'Dùng template HTML có autoescape và truyền dữ liệu qua biến của template. Nếu dựng HTML trực tiếp, mã hóa đầu ra theo ngữ cảnh.'],
+  'srcaudit-python-sax-external-entities': ['CWE-611', 'Dữ liệu XML từ request đi vào trình phân tích bật thực thể ngoài', 'high',
+    'Tắt xử lý thực thể ngoài trên parser. Dùng trình phân tích dành cho dữ liệu XML không tin cậy và từ chối DTD nếu không cần.'],
+  'srcaudit-python-request-file-path': ['CWE-22', 'Dữ liệu request điều khiển đường dẫn truy cập file trong Python', 'high',
+    'Ánh xạ mã được phép sang file cố định hoặc dùng API giới hạn truy cập trong thư mục gốc tin cậy.'],
+  'srcaudit-python-request-dynamic-code': ['CWE-95', 'Dữ liệu request đi vào API thực thi mã Python', 'high',
+    'Dùng parser dữ liệu có schema hoặc chọn thao tác từ danh sách cố định.'],
+  'srcaudit-python-lxml-xpath-injection': ['CWE-643', 'Dữ liệu request điều khiển biểu thức XPath của lxml', 'high',
+    'Giữ biểu thức XPath cố định và truyền giá trị qua biến XPath.'],
+  'srcaudit-java-servlet-file-path': ['CWE-22', 'Dữ liệu request điều khiển đường dẫn đọc file trong Java', 'high',
+    'Ánh xạ mã được phép sang file cố định. Nếu cần đường dẫn động, chuẩn hóa và kiểm tra thư mục gốc cùng symlink.'],
+  'srcaudit-java-servlet-html-response': ['CWE-79', 'Dữ liệu request đi thẳng vào phản hồi HTML của Servlet', 'medium',
+    'Dùng template có cơ chế escape hoặc mã hóa đầu ra theo đúng ngữ cảnh HTML, thuộc tính hay JavaScript.'],
   'srcaudit-js-file-write-path-traversal': ['CWE-22', 'Dữ liệu request điều khiển đường dẫn ghi file trong Node.js', 'high',
     'Dùng tên file do máy chủ sinh hoặc ánh xạ mã được phép sang đường dẫn cố định. Kiểm tra thư mục đích và symlink.'],
   'srcaudit-python-requests-ssrf': ['CWE-918', 'Dữ liệu request điều khiển URL của Python Requests', 'medium',
@@ -139,6 +157,15 @@ rules.set('srcaudit-github-actions-script-injection', {
   impact: 'Giá trị được chèn trước khi shell phân tích script. Lệnh có thể chạy với quyền của job.',
   remediation: 'Truyền giá trị qua env: của step. Trong Bash, dùng "$TEN_BIEN"; với shell khác, dùng cú pháp biến môi trường phù hợp.',
 });
+rules.set('srcaudit-github-actions-token-write-all', {
+  cwe: 'CWE-250', title: 'GitHub Actions cấp quyền ghi rộng cho GITHUB_TOKEN', severity: 'medium',
+  evidence: 'Workflow hoặc job khai báo permissions: write-all.',
+  impact: 'Các bước dùng GITHUB_TOKEN có quyền ghi rộng hơn mức cần thiết trong phạm vi GitHub cho phép.',
+  condition: 'Kiểm tra quyền thực tế theo loại sự kiện, chính sách repository và ghi đè ở cấp job.',
+  remediation: 'Khai báo từng quyền cần thiết. Bắt đầu với contents: read và chỉ cấp quyền ghi cho job cần dùng.',
+  reference: 'https://docs.github.com/en/actions/reference/security/secure-use#using-least-privilege',
+  status: 'observed',
+});
 rules.set('srcaudit-dockerfile-root-user', {
   cwe: 'CWE-250', title: 'Stage cuối của Dockerfile có thể chạy với quyền root', severity: 'medium',
   evidence: 'Stage cuối đặt USER là root hoặc 0, hoặc dùng base image thuộc phạm vi rule mà thiếu USER.',
@@ -152,6 +179,49 @@ rules.set('srcaudit-node-jwt-literal-verification-key', {
   remediation: 'Nạp khóa từ secret manager và giữ allowlist thuật toán. Nếu khóa từng được dùng, xoay vòng khóa.',
 });
 
+rules.set('srcaudit-python-flask-insecure-cookie', {
+  cwe: 'CWE-614', title: 'Phản hồi Flask đặt cookie thiếu cờ Secure', severity: 'medium',
+  evidence: 'Lời gọi set_cookie() trên phản hồi Flask bỏ qua tham số secure hoặc đặt secure=False.',
+  impact: 'Trình duyệt có thể gửi cookie qua HTTP. Kiểm tra cookie có chứa mã phiên hoặc dữ liệu nhạy cảm không.',
+  remediation: 'Đặt secure=True cho cookie nhạy cảm và phục vụ ứng dụng qua HTTPS.',
+  condition: 'Kiểm tra header Set-Cookie ở môi trường triển khai. Proxy hoặc middleware có thể bổ sung cờ Secure.',
+  reference: 'https://flask.palletsprojects.com/en/stable/web-security/#set-cookie-options',
+});
+
+rules.set('srcaudit-python-weak-hashlib', {
+  cwe: 'CWE-327', title: 'Python chọn thuật toán băm MD5 hoặc SHA-1', severity: 'low',
+  evidence: 'Lời gọi hashlib chọn MD5 hoặc SHA-1 và không khai báo usedforsecurity=False.',
+  impact: 'MD5 và SHA-1 không cung cấp khả năng chống va chạm phù hợp cho mục đích bảo mật.',
+  condition: 'Kiểm tra digest có tham gia xác thực hoặc bảo vệ tính toàn vẹn trước sửa đổi có chủ đích hay chỉ làm checksum phi bảo mật.',
+  remediation: 'Dùng SHA-256 trở lên khi cần chống va chạm. Với mật khẩu, dùng thuật toán băm mật khẩu như Argon2id hoặc scrypt.',
+  reference: 'https://docs.python.org/3/library/hashlib.html',
+});
+rules.set('srcaudit-python-tempfile-mktemp', {
+  cwe: 'CWE-377', title: 'Python tạo tên tệp tạm chưa giữ chỗ', severity: 'low',
+  evidence: 'Lời gọi phân giải tới tempfile.mktemp(), hàm trả về tên trước khi tạo tệp.',
+  impact: 'Tiến trình khác có quyền ghi vào thư mục có thể chiếm tên tệp trước khi ứng dụng tạo tệp.',
+  condition: 'Xác minh tên được dùng để mở hoặc tạo tệp sau đó và kiểm tra quyền ghi vào thư mục tạm.',
+  remediation: 'Dùng NamedTemporaryFile() hoặc mkstemp() để tạo tệp ngay và giữ handle.',
+  reference: 'https://docs.python.org/3/library/tempfile.html#tempfile.mktemp',
+});
+rules.set('srcaudit-python-unverified-tls-context', {
+  cwe: 'CWE-295', title: 'Python tạo TLS context không xác minh máy chủ', severity: 'medium',
+  evidence: 'Lời gọi phân giải tới ssl._create_unverified_context().',
+  impact: 'Kết nối HTTPS dùng context này có thể chấp nhận chứng chỉ không đáng tin.',
+  condition: 'Xác minh context được dùng cho kết nối phía máy khách và có được đổi cấu hình trước khi kết nối hay không.',
+  remediation: 'Dùng ssl.create_default_context() và cấu hình CA tin cậy khi cần.',
+  reference: 'https://peps.python.org/pep-0476/#opting-out',
+});
+
+rules.set('srcaudit-python-weak-random', {
+  cwe: 'CWE-338', title: 'Python dùng bộ sinh giả ngẫu nhiên random', severity: 'low',
+  evidence: 'Lời gọi phân giải tới một hàm sinh giá trị từ bộ sinh mặc định của module random.',
+  impact: 'Kết quả có thể dự đoán được nếu dùng để tạo bí mật hoặc mã xác thực.',
+  condition: 'Truy vết kết quả đến token, khóa hoặc quyết định bảo mật. Dùng random cho mô phỏng và lấy mẫu phi bảo mật có thể phù hợp.',
+  remediation: 'Dùng secrets hoặc nguồn ngẫu nhiên mật mã tương đương cho giá trị bảo mật.',
+  reference: 'https://docs.python.org/3/library/secrets.html',
+});
+
 const languageByExtension = new Map([
   ['.js', 'JavaScript'], ['.mjs', 'JavaScript'], ['.cjs', 'JavaScript'], ['.jsx', 'JavaScript'],
   ['.ts', 'TypeScript'], ['.tsx', 'TypeScript'], ['.py', 'Python'], ['.php', 'PHP'],
@@ -160,7 +230,7 @@ const languageByExtension = new Map([
 
 export const SEMGREP_RULE_COUNT = rules.size;
 export function semgrepLanguage(file) {
-  if (path.basename(file) === 'Dockerfile') return 'Dockerfile';
+  if (isDockerfileName(path.basename(file))) return 'Dockerfile';
   if (/(?:^|\/)\.github\/workflows\/[^/]+\.ya?ml$/.test(file)) return 'GitHub Actions';
   return languageByExtension.get(path.extname(file).toLowerCase());
 }
@@ -206,16 +276,17 @@ function normalize(output, workspace, staged) {
     if (!excerpts.has(stagedPath)) excerpts.set(stagedPath, redactedSourceLines(file, text));
     const lastMarkedLine = multiline ? endLine - (endColumn === 1 ? 1 : 0) : line;
     const sourceExcerpt = sourceExcerptAt(excerpts.get(stagedPath), line, lastMarkedLine);
+    const { condition, ...details } = rule;
     const structural = Boolean(rule.evidence);
     findings.push({
-      ...rule, ruleId: result.check_id, confidence: 'medium', status: 'needs-review',
+      ...details, ruleId: result.check_id, confidence: 'medium', status: rule.status ?? 'needs-review',
       location: { file, line, column, ...(multiline ? { endLine, endColumn } : {}) },
       ...(sourceExcerpt ? { sourceExcerpt } : {}),
       evidence: rule.evidence ?? 'Semgrep theo dõi dữ liệu từ request tới đối số nhạy cảm. Mở vị trí trong source để xem mã.',
       impact: rule.impact ?? 'Khả năng khai thác phụ thuộc vào biện pháp kiểm tra đầu vào và ngữ cảnh chạy thực tế.',
-      reference: 'https://cwe.mitre.org/data/definitions/' + rule.cwe.slice(4) + '.html',
+      reference: rule.reference ?? 'https://cwe.mitre.org/data/definitions/' + rule.cwe.slice(4) + '.html',
       detection: structural
-        ? { method: 'semgrep-pattern', condition: 'Đối chiếu mẫu mã nguồn với cấu hình và cách chạy thực tế.' }
+        ? { method: 'semgrep-pattern', condition: condition ?? 'Đối chiếu mẫu mã nguồn với cấu hình và cách chạy thực tế.' }
         : { method: 'semgrep-taint', condition: 'Đối chiếu luồng với kiểm tra đầu vào và cấu hình thực tế.' },
     });
   }
@@ -229,8 +300,9 @@ function normalize(output, workspace, staged) {
   };
 }
 
-export async function runSemgrep(files, { executable = semgrepExecutable(), run = execute } = {}) {
-  const workspace = await mkdtemp(path.join(tmpdir(), 'scanner-semgrep-'));
+export async function runSemgrep(files, { executable = semgrepExecutable(), run = execute, workspaceDirectory } = {}) {
+  const workspace = workspaceDirectory ?? await mkdtemp(path.join(tmpdir(), 'scanner-semgrep-'));
+  if (workspaceDirectory) await mkdir(workspace, { mode: 0o700 });
   const staged = new Map();
   try {
     await mkdir(path.join(workspace, 'targets'));
@@ -266,13 +338,14 @@ export async function runSemgrep(files, { executable = semgrepExecutable(), run 
     const { stdout } = await run(executable, args, {
       cwd: workspace, env, timeout: 90_000, maxBuffer: 4 * 1024 * 1024, windowsHide: true,
     });
-    return normalize(JSON.parse(stdout), workspace, staged);
+    const result = normalize(JSON.parse(stdout), workspace, staged);
+    return await reviewPythonFindings(result, staged, { executable, workspace, env, args, run });
   } catch (error) {
     let message = 'Semgrep không hoàn tất. Kiểm tra bản cài và giới hạn của lượt quét.';
     if (error.code === 'ENOENT') message = 'Chưa tìm thấy Semgrep. Cài Semgrep CE hoặc cấu hình SECURITYSCANNER_SEMGREP_EXE.';
     else if (error.killed) message = 'Semgrep vượt thời gian phân tích 90 giây.';
     return { status: 'failed', scanned: 0, languages: languageCounts(staged), findings: [], message };
   } finally {
-    await rm(workspace, { recursive: true, force: true });
+    await rm(workspace, { recursive: true, force: true, maxRetries: 5, retryDelay: 150 });
   }
 }

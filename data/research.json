@@ -1,0 +1,80 @@
+[
+  {
+    "id": "RESEARCH-SAST-CODEQL-2026",
+    "kind": "research",
+    "name": "An Empirical Analysis of CodeQL False Positives and Query Refinements for Java Vulnerabilities",
+    "publication": "Amirali Sajadi, Saikat Dutta và Preetha Chatterjee · arXiv, bản thảo 2026",
+    "description": "Nhóm nghiên cứu rà tay 500 đường dẫn CodeQL báo nhầm. Các nguyên nhân thường gặp gồm điều kiện chặn luồng dữ liệu, hàm làm sạch, ngữ cảnh thực thi vô hại và ranh giới tin cậy chưa được mô hình hóa.",
+    "reviewSteps": [
+      "Áp dụng cho SrcAudit: lưu lý do báo nhầm theo từng quy tắc và thêm cặp mẫu có đối chứng cho mỗi điều kiện lọc.",
+      "Giới hạn: nghiên cứu xét nhóm truy vấn CodeQL cho Java đã được chọn. Một ca dương tính bị loại sau khi tinh chỉnh, nên cần đo cả tỷ lệ bỏ sót sau mỗi lần sửa quy tắc."
+    ],
+    "tags": ["SAST", "CodeQL", "Java", "báo nhầm", "sanitizer", "luồng dữ liệu"],
+    "references": ["https://arxiv.org/abs/2609.04535v2"]
+  },
+  {
+    "id": "RESEARCH-SAST-INDUSTRY-2024",
+    "kind": "research",
+    "name": "Understanding Industry Perspectives of Static Analysis Based Security Testing",
+    "publication": "Amit Seal Ami, Kevin Moran, Denys Poshyvanyk và Adwait Nadkarni · IEEE Symposium on Security and Privacy, 2024",
+    "description": "Nghiên cứu định tính phỏng vấn 20 người làm thực tế về cách họ chọn và dùng SAST, với các kỳ vọng về độ phủ, báo nhầm và những lỗ hổng bị bỏ sót.",
+    "reviewSteps": [
+      "Áp dụng cho SrcAudit: báo rõ phạm vi đã quét, loại tệp bị bỏ qua và điều kiện người dùng cần xác minh.",
+      "Giới hạn: kết quả phỏng vấn phản ánh trải nghiệm sử dụng công cụ, không cung cấp tỷ lệ phát hiện để gán cho SrcAudit."
+    ],
+    "tags": ["SAST", "phạm vi", "bỏ sót", "false negative"],
+    "references": ["https://arxiv.org/abs/2307.16325v3", "https://doi.org/10.1109/SP54263.2024.00019"]
+  },
+  {
+    "id": "RESEARCH-ANALYZER-PRECISION-2021",
+    "kind": "research",
+    "name": "A Critical Comparison on Six Static Analysis Tools: Detection, Agreement, and Precision",
+    "publication": "Valentina Lenarduzzi, Savanna Lujan, Nyyti Saarimäki và Fabio Palomba · arXiv, 2021",
+    "description": "So sánh sáu công cụ trên 47 dự án Java và đánh giá thủ công các cảnh báo. Các công cụ thường báo những vị trí khác nhau ngay cả ở những nhóm vấn đề tương tự.",
+    "reviewSteps": [
+      "Áp dụng cho SrcAudit: chấm từng nhóm quy tắc trên cùng bộ mẫu có nhãn. Khi đối chiếu nhiều công cụ, xác minh vị trí và bằng chứng trước khi gộp cảnh báo.",
+      "Giới hạn: nghiên cứu có cả cảnh báo chất lượng mã Java. Sự đồng thuận giữa hai công cụ không tự xác nhận một lỗ hổng."
+    ],
+    "tags": ["precision", "Java", "độ chính xác", "benchmark", "báo nhầm"],
+    "references": ["https://arxiv.org/abs/2101.08832v1"]
+  },
+  {
+    "id": "RESEARCH-ANALYZER-RANKING-2022",
+    "kind": "research",
+    "name": "Learning to Reduce False Positives in Analytic Bug Detectors",
+    "publication": "Anant Kharkar và cộng sự · ICSE, 2022",
+    "description": "Bài báo thử dùng mô hình học máy để đánh giá lại cảnh báo phân tích tĩnh và nghiên cứu khả năng khái quát giữa hai nhóm lỗi là dereference null và rò rỉ tài nguyên.",
+    "reviewSteps": [
+      "Áp dụng cho SrcAudit: nếu thử mô hình xếp hạng, ưu tiên đưa cảnh báo có bằng chứng rõ lên đầu và giữ các cảnh báo còn lại để người đọc tra cứu.",
+      "Giới hạn: kết quả trên hai nhóm lỗi được nghiên cứu chưa cho biết độ chính xác trên Python Flask, cookie hay chuyển hướng."
+    ],
+    "tags": ["xếp hạng", "triage", "precision", "báo nhầm"],
+    "references": ["https://arxiv.org/abs/2203.09907v1", "https://doi.org/10.1145/3510003.3510153"]
+  },
+  {
+    "id": "RESEARCH-API-MISUSE-2018",
+    "kind": "research",
+    "name": "A Systematic Evaluation of Static API-Misuse Detectors",
+    "publication": "Sven Amann, Hoan Anh Nguyen, Sarah Nadi, Tien N. Nguyen và Mira Mezini · IEEE Transactions on Software Engineering, 2018 (bản tác giả)",
+    "description": "Nghiên cứu xây dựng MuBench và một quy trình đánh giá có thể lặp lại. Công cụ có thể báo nhầm khi coi một kiểu gọi API ít gặp là sai, trong khi thư viện chấp nhận nhiều cách gọi hợp lệ.",
+    "reviewSteps": [
+      "Áp dụng cho SrcAudit: đối chiếu tài liệu framework và thêm các biến thể hợp lệ như import alias, cấu hình tường minh và hành vi mặc định.",
+      "Giới hạn: MuBench tập trung vào cách dùng API Java. Cần tập mẫu độc lập để đo quy tắc Flask hoặc Python."
+    ],
+    "tags": ["MuBench", "API", "benchmark", "framework", "recall"],
+    "references": ["https://arxiv.org/abs/1712.00242v3"]
+  },
+  {
+    "id": "RESEARCH-ANALYZER-WORKFLOW-2018",
+    "kind": "research",
+    "name": "Lessons from Building Static Analysis Tools at Google",
+    "publication": "Caitlin Sadowski, Edward Aftandilian, Alex Eagle, Liam Miller-Cushon và Ciera Jaspan · Communications of the ACM, 2018",
+    "description": "Bài báo mô tả việc tích hợp phân tích tĩnh vào quy trình phát triển tại Google và quan sát cách kỹ sư xử lý cảnh báo trước khi đưa mã vào kho.",
+    "reviewSteps": [
+      "Áp dụng cho SrcAudit: cung cấp vị trí, lý do, hướng sửa có thể thực hiện và theo dõi phản hồi theo từng quy tắc.",
+      "Giới hạn: đây là kinh nghiệm triển khai trong quy trình nội bộ của Google. Mức độ sử dụng và số cảnh báo được sửa không thay thế phép đo recall trên bộ có nhãn."
+    ],
+    "tags": ["Google", "code review", "phản hồi", "báo cáo", "workflow"],
+    "references": ["https://research.google/pubs/lessons-from-building-static-analysis-tools-at-google/"]
+  }
+]

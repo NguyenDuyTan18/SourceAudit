@@ -164,3 +164,31 @@ Các ca kiểm thử đi từ nhu cầu tải một ZIP dự án có mã nguồn
 `npm run benchmark:semgrep` chạy bằng Semgrep CE 1.184.0. Mỗi mẫu mới phải trả đúng một phát hiện của rule tương ứng, đúng vị trí và có hướng sửa. Một lượt upload ZIP qua API cục bộ với Semgrep thật quét 16 tệp mục tiêu và trả 8 phát hiện. Workflow nhiều dòng được báo một lần tại `check.yml:6:9–8:56`. Báo cáo JSON, HTML và TXT giữ đường dẫn gốc và che khóa JWT tổng hợp. `npm run test:coverage` đạt 84/84 với 98,54% độ phủ dòng.
 
 Tự đánh giá **4,6/5**. Chính xác 4/5 vì benchmark xác nhận các cặp mẫu và chưa đo trên dự án thực tế. Đầy đủ 4/5 vì Dockerfile chỉ kiểm tra các dạng chỉ thị một dòng được mô tả trong README. Rõ ràng 5/5 nhờ vị trí đầu và cuối cùng hướng sửa. Áp dụng 5/5 vì đã xác nhận luồng ZIP và ba định dạng xuất. Súc tích 5/5 vì mỗi mẫu mới trả đúng một phát hiện. Ưu tiên cải thiện là bổ sung đối chứng Dockerfile có heredoc và đối chiếu trên các dự án thực tế được phép quét.
+
+## Phạm vi diff, dependency và hàng đợi
+
+Sáu cặp Python và Java mới đều bị bỏ sót khi chạy Semgrep trước thay đổi. Sau khi thêm rule, `npm run benchmark:semgrep` kiểm tra phát hiện và vị trí trên 91 cặp. Mức báo nhầm trên bộ OWASP độc lập được ghi riêng trong [kết quả benchmark](accuracy.md#mở-rộng-flask-python-và-servlet-12112026).
+
+Kiểm thử tích hợp tái hiện lỗi khi diff rỗng, bỏ qua dependency ở chế độ sâu và chia sẻ write-up qua tài khoản. Bản cập nhật xác nhận diff rỗng thành công, baseline phân biệt tệp đã quét với tệp ngoài phạm vi, và write-up chỉ xuất hiện trong báo cáo của tài khoản nhập. Kiểm thử hàng đợi xác nhận ZIP đã có trên đĩa khi API trả `202`, bản ghi đang chờ được khôi phục, tệp tạm được dọn và quota được giải phóng sau khi xóa báo cáo.
+
+`npm run test:coverage` đạt 115/115 và 97,79% độ phủ dòng. Lượt upload ZIP cục bộ qua worker dùng Semgrep thật trả một phát hiện Python và 15 khớp advisory Composer trong cùng báo cáo. Chrome xác nhận bộ lọc tách hai nhóm và thao tác xóa báo cáo. Thanh lọc vừa trong chiều rộng 375 px và trang không phát sinh lỗi JavaScript trong lượt kiểm tra.
+
+## Độ chính xác quét sâu Python
+
+Trước khi thêm bước kiểm tra AST, 6 cặp đối chứng đầu có 5 báo nhầm, và 3 cặp kiểm tra riêng có 3 báo nhầm. Sau thay đổi, Semgrep phát hiện đúng 8/8 cặp đối chứng và 3/3 cặp kiểm tra riêng, với 0 báo nhầm ở cả hai bộ. Mẫu có lỗi bao gồm kiểm tra sai dấu nháy XPath, gán lại biến sau guard và kiểm tra đường dẫn trước khi chuẩn hóa.
+
+Kiểm thử mô phỏng kiểm tra rằng bản sao chỉ thay thành phần f-string đã xác minh. Nếu lượt quét lại vẫn có phát hiện, bỏ qua tệp hoặc báo lỗi cú pháp, SrcAudit giữ cảnh báo ở vị trí gốc. `npm run test:coverage` đạt 116/116 và 97,78% độ phủ dòng JavaScript.
+
+Trên OWASP Python, 68 phát hiện đúng được giữ và 37 trong 64 báo nhầm được loại. Bộ kiểm tra riêng gồm ba cặp mã tổng hợp. Xem số liệu của từng rule và lệnh tái lập trong [tài liệu độ chính xác](accuracy.md#giảm-báo-nhầm-khi-quét-sâu-python-12112026).
+
+## Độ phủ HTML, cookie và XML của Python
+
+Semgrep bỏ sót cả tám mẫu đầu trước khi có rule mới. Ba cặp tiếp theo phát hiện đúng mẫu có lỗi nhưng còn cảnh báo mẫu đã sửa, nơi các nhánh và chuỗi định dạng có thể được xác định là hằng số. Sau khi bổ sung kiểm tra AST, 11/11 cặp mới được phân biệt đúng. `npm run benchmark:semgrep` đạt 102/102 mẫu có lỗi, 0/102 mẫu đã sửa bị báo, và xác nhận cột của đối số trong từng phát hiện mới.
+
+`npm run test:coverage` đạt 116/116, với độ phủ dòng JavaScript 97,85%. Xem số phát hiện đúng và báo nhầm của từng nhóm ở [benchmark OWASP](accuracy.md#bổ-sung-html-cookie-và-xml-cho-quét-sâu-python).
+
+## Nhận diện kết nối LDAP
+
+Bốn cặp mới ban đầu bị bỏ sót. Sau khi mở rộng rule, một cặp bổ sung tái hiện báo nhầm khi truyền trực tiếp `request.args.get()` vào `escape_filter_chars()`. Mẫu đối chứng còn lại đặt lời gọi LDAP bên trong đối số để xác nhận rằng cảnh báo vẫn xuất hiện trước khi escape có hiệu lực.
+
+Semgrep phát hiện đủ sáu mẫu có lỗi, chỉ đúng cột của bộ lọc và giữ im lặng trên sáu mẫu đã sửa. Benchmark đầy đủ đạt 108/108 mẫu có lỗi và 0/108 mẫu đã sửa bị báo. `npm run test:coverage` đạt 116/116.

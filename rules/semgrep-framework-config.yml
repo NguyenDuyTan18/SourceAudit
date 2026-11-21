@@ -14,6 +14,30 @@ rules:
           metavariable: $SCRIPT
           regex: '(?s).*\$\{\{\s*github\.(?:head_ref|event\.(?:pull_request\.(?:title|body|head\.(?:ref|label))|issue\.(?:title|body)|comment\.body|head_commit\.message))\s*\}\}'
 
+  - id: srcaudit-github-actions-token-write-all
+    languages: [yaml]
+    severity: WARNING
+    message: Grant only the GITHUB_TOKEN permissions needed by the workflow or job.
+    paths:
+      include:
+        - "**/.github/workflows/*.yml"
+    patterns:
+      - pattern-either:
+          - pattern: |
+              permissions: $ACCESS
+              ...
+              jobs: ...
+          - pattern: |
+              jobs:
+                $JOB:
+                  permissions: $ACCESS
+                  ...
+                ...
+      - metavariable-regex:
+          metavariable: $ACCESS
+          regex: "^(?:write-all|'write-all'|\"write-all\")$"
+      - focus-metavariable: $ACCESS
+
   - id: srcaudit-dockerfile-root-user
     languages: [dockerfile]
     severity: WARNING

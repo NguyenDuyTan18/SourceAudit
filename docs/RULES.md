@@ -2,7 +2,7 @@
 
 Tài liệu này liệt kê chi tiết các quy tắc của hai chế độ phân tích. Xem [README](../README.md) để cài đặt và sử dụng.
 
-- [Phân tích sâu bằng Semgrep (47 quy tắc)](#phân-tích-sâu-bằng-semgrep)
+- [Phân tích sâu bằng Semgrep](#phân-tích-sâu-bằng-semgrep)
 - [Quét nhanh (82 quy tắc)](#quét-nhanh)
 
 ## Phân tích sâu bằng Semgrep
@@ -17,6 +17,17 @@ Tài liệu này liệt kê chi tiết các quy tắc của hai chế độ phâ
 
 Ví dụ, quy tắc `srcaudit-python-requests-ssrf` theo dõi `request.args["url"]` qua biến `target` đến đối số URL của `requests.get(target)`. Phát hiện CWE-918 trỏ vào `target`. Bản đối chứng dùng URL cố định và đưa dữ liệu từ request vào `params=` để kiểm tra quy tắc chỉ đánh dấu đích gửi yêu cầu. [Cặp mã mẫu](../scripts/semgrep-multilang-cases.mjs) · [Tài liệu Requests](https://docs.python-requests.org/en/latest/api/)
 
+### Kiểm tra lại cảnh báo Python
+
+Sau khi Semgrep xác định vị trí đối số, SrcAudit dùng AST của Python để kiểm tra một số tình huống trong cùng hàm. Bước này áp dụng cho XPath của lxml, đường dẫn file, thực thi mã động, chuyển hướng và HTML của Flask, thực thể ngoài của SAX và bộ lọc LDAP. Trình phân tích đọc cú pháp của bản sao tạm và giữ cảnh báo nếu thiếu dữ kiện, không phân tích được tệp hoặc không gọi được Python.
+
+- **XPath.** Đối chứng ưu tiên bind biến XPath. Với mẫu so sánh thuộc tính có literal bao bằng dấu nháy đơn, bộ lọc còn nhận diện việc loại đúng dấu đó hoặc thoát khỏi hàm khi gặp dấu đó. [Biến XPath trong lxml](https://lxml.de/xpathxslt.html#xpath)
+- **Đường dẫn file.** Bộ lọc kiểm tra cả thư mục gốc lẫn đường dẫn đích đã qua `Path.resolve()`, đối số giữ nguyên và nhánh kiểm tra `is_relative_to()` chi phối lời gọi đọc file. Kiểm tra chuỗi chung hoặc gán lại biến sau guard vẫn giữ cảnh báo. Trường hợp f-string có thành phần hằng được quét lại trên bản sao tạm, giữ nguyên các thành phần chưa biết. [Tài liệu pathlib](https://docs.python.org/3/library/pathlib.html#pathlib.PurePath.is_relative_to)
+- **Hằng số và chuyển hướng.** Bộ lọc xác minh một số phép toán và nhánh có kết quả cố định. Với chuyển hướng Flask, nhánh lỗi phải dừng trước lời gọi chuyển hướng và điều kiện phải kiểm tra cả scheme HTTPS lẫn danh sách hostname cố định.
+- **HTML và XML.** Bộ lọc chỉ loại cảnh báo khi chứng minh được toàn bộ đối số XML hoặc nội dung HTML là hằng số. Phép ghép chuỗi, `+=` và định dạng đơn giản được kiểm tra trên các giá trị nguyên thủy đã biết.
+
+JSON báo cáo ghi số cảnh báo đã lọc theo lý do trong `stats.sourceAnalysis.pythonPrecision`. Việc kiểm tra lại đường dẫn giữ cảnh báo khi Semgrep báo lỗi, bỏ qua bản sao hoặc hết thời gian. [Mã kiểm tra AST](../src/python-precision.py) · [Mã quét lại](../src/python-precision.mjs) · [Kết quả đo](testing/accuracy.md#giảm-báo-nhầm-khi-quét-sâu-python-12112026)
+
 ### Quy tắc lấy từ đâu?
 
 | Thành phần | Nguồn và vai trò |
@@ -30,7 +41,7 @@ Khi thêm rule quét sâu, chọn API cần kiểm tra và CWE tương ứng, kh
 
 ### Các nhóm lỗi theo ngôn ngữ
 
-Bộ quét dùng **47 quy tắc cục bộ**. Có 45 quy tắc cho 8 ngôn ngữ lập trình và 2 quy tắc cho tệp cấu hình. Có thể quét một ZIP chứa nhiều ngôn ngữ và cả cấu hình trong cùng lượt.
+Bộ quét dùng các quy tắc cục bộ cho tám ngôn ngữ lập trình, GitHub Actions và Dockerfile. Có thể quét một ZIP chứa nhiều ngôn ngữ và cấu hình trong cùng lượt.
 
 | Ngôn ngữ | Nguồn đầu vào mẫu | Điểm nhạy cảm và nhóm lỗi |
 |---|---|---|
@@ -42,7 +53,10 @@ Bộ quét dùng **47 quy tắc cục bộ**. Có 45 quy tắc cho 8 ngôn ngữ
 
 | Quy tắc bổ sung | Phạm vi |
 |---|---|
-| LDAP injection trong Python (CWE-90) | Bộ lọc truyền vào `ldap_conn.search()` theo vị trí hoặc qua `search_filter=`. Dùng `escape_filter_chars()` cho giá trị trước khi ghép vào cấu trúc bộ lọc cố định. [Tài liệu ldap3](https://ldap3.readthedocs.io/en/latest/searches.html) |
+| HTML phản chiếu của Flask (CWE-79) | Theo dõi dữ liệu request tới `Response(..., mimetype="text/html")` hoặc `content_type="text/html"`, và một số route trả chuỗi tích lũy bằng `+=`. Dùng template có autoescape và mã hóa dữ liệu theo ngữ cảnh. [Flask về HTML escaping](https://flask.palletsprojects.com/en/stable/quickstart/#html-escaping) |
+| Cookie Flask thiếu Secure (CWE-614) | Đánh dấu đối số `secure=False` trong `set_cookie()` trên phản hồi được tạo bằng `make_response()` hoặc `Response()`. Dùng `secure=True` cho cookie nhạy cảm qua HTTPS. [Flask về cookie](https://flask.palletsprojects.com/en/stable/web-security/#set-cookie-options) |
+| Thực thể ngoài trong SAX (CWE-611) | Theo dõi dữ liệu request vào `minidom.parseString()` khi cùng parser từ `xml.sax.make_parser()` được bật `feature_external_ges`. Rule có đối chứng cho parser khác và việc tắt lại ngay trước khi phân tích. [Tài liệu Python SAX](https://docs.python.org/3.12/library/xml.sax.html) |
+| LDAP injection trong Python (CWE-90) | Bộ lọc truyền vào `search()` theo vị trí hoặc qua `search_filter=`. Nhận diện các tên kết nối đã hỗ trợ, kết nối tạo bằng `ldap3.Connection()` kể cả trong `with`, và lời gọi có hằng thuộc tính của ldap3. Dùng `escape_filter_chars()` cho từng giá trị trước khi ghép vào bộ lọc cố định. [Tài liệu ldap3](https://ldap3.readthedocs.io/en/latest/searches.html) |
 | Giải tuần tự không an toàn trong PHP (CWE-502) | Dữ liệu đi vào `unserialize()`, kể cả khi đặt `allowed_classes` thành `false`. Dùng JSON và kiểm tra cấu trúc dữ liệu. [Tài liệu PHP](https://www.php.net/unserialize) |
 | XPath injection trong Java (CWE-643) | Biểu thức trong `XPath.evaluate()`, `evaluateExpression()` và `compile()` khi Semgrep nhận diện được kiểu JAXP. Giữ biểu thức cố định và dùng `XPathVariableResolver` để truyền giá trị. [Tài liệu JAXP](https://docs.oracle.com/en/java/javase/11/docs/api/java.xml/javax/xml/xpath/XPath.html) |
 | Chèn nội dung vào log trong Go (CWE-117) | Đối số của `log.Print()`, `log.Println()` và chuỗi định dạng của `log.Printf()`. Mã hóa ký tự điều khiển bằng `strconv.Quote()` hoặc dùng trường dữ liệu trong logger có cấu trúc. [Tài liệu Go về strconv](https://pkg.go.dev/strconv#Quote) |
@@ -81,24 +95,33 @@ Các rule nhận dữ liệu từ query, body, params, header và cookie của b
 | Tệp hoặc thư viện | Phát hiện | Đối chứng và nguồn |
 |---|---|---|
 | GitHub Actions (`.github/workflows/*.yml` hoặc `*.yaml`) | CWE-78 khi một số biểu thức sự kiện do người dùng điều khiển, như tiêu đề PR hoặc `github.head_ref`, được chèn trực tiếp vào khối `run:`. Báo cáo giữ vị trí đầu và cuối của khối nhiều dòng. | Truyền qua `env:` và trích dẫn biến trong shell. [GitHub Docs](https://docs.github.com/en/actions/concepts/security/script-injections) |
-| `Dockerfile` | CWE-250 khi `USER` cuối của stage cuối là `root` hoặc `0`, hoặc stage cuối dùng `scratch`, `alpine` hay `busybox` theo các mẫu tên hỗ trợ mà thiếu `USER`. | Đặt user không phải root ở stage cuối. Kiểm tra user thực tế và cấu hình override khi chạy. [Dockerfile reference](https://docs.docker.com/reference/dockerfile/#user) |
+| Quyền GitHub Actions | CWE-250 khi `permissions: write-all` được đặt ở cấp workflow hoặc job. | Cấp từng quyền cần thiết cho job và xác nhận quyền thực tế theo loại sự kiện và chính sách repo. [GitHub Secure use reference](https://docs.github.com/en/actions/reference/security/secure-use#using-least-privilege) |
+| `Dockerfile`, `Dockerfile.prod`, `build.Dockerfile` | CWE-250 khi `USER` cuối của stage cuối là `root` hoặc `0`, hoặc stage cuối dùng `scratch`, `alpine` hay `busybox` theo các mẫu tên hỗ trợ mà thiếu `USER`. | Đặt user không phải root ở stage cuối. Kiểm tra user thực tế và cấu hình override khi chạy. [Dockerfile reference](https://docs.docker.com/reference/dockerfile/#user) |
 | Node.js `jsonwebtoken` | CWE-321 khi `verify()` dùng chuỗi khóa viết cứng và `algorithms` chỉ định một thuật toán HS256, HS384 hoặc HS512. | Nạp khóa từ secret manager. Báo cáo che literal khóa. [API jsonwebtoken](https://github.com/auth0/node-jsonwebtoken#jwtverifytoken-secretorpublickey-options-callback) |
 | Spring JDBC | CWE-89 khi tham số `@RequestParam` đi vào đối số SQL của một số phương thức `JdbcTemplate`, như `queryForObject()` hoặc `update()`. | Dùng SQL cố định với placeholder và đối số bind riêng. [API JdbcTemplate](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/jdbc/core/JdbcTemplate.html) |
 | Laravel | CWE-89 khi giá trị từ `->input()` hoặc `->query()` đi vào đối số SQL của `DB::select()`, `selectOne()`, `statement()` hoặc `unprepared()`. Mẫu dùng tên facade `DB`. | Bind giá trị riêng với các API hỗ trợ binding. [Laravel Database](https://laravel.com/docs/12.x/database#running-a-select-query) |
 | Ruby on Rails | CWE-918 khi `params[...]` hoặc `params.fetch(...)` trong controller kế thừa `ApplicationController` điều khiển đích của `Net::HTTP.get()` hoặc `get_response()`. | Ánh xạ lựa chọn sang URL cố định. [Rails Controller](https://guides.rubyonrails.org/action_controller_overview.html#parameters) · [Ruby Net::HTTP](https://docs.ruby-lang.org/en/master/Net/HTTP.html) |
+| Flask và Python | Theo dõi request nhập trực tiếp hoặc có alias. Thêm redirect (CWE-601), đường dẫn file (CWE-22), `eval` hoặc `exec` (CWE-95), biểu thức lxml XPath (CWE-643). | Ưu tiên đích cố định, thư mục gốc cố định và biểu thức có biến bind. [Flask Request](https://flask.palletsprojects.com/en/stable/api/#flask.Request) · [lxml XPath](https://lxml.de/xpathxslt.html#xpath) |
+| Flask redirect nội bộ | Quy tắc CWE-601 lọc đích do `flask.url_for()` tạo từ tên endpoint cố định và các đối số tường minh. | Nếu tên endpoint động, đặt `_external` hay `_scheme`, hoặc dùng `*args` hay `**kwargs`, quy tắc tiếp tục đánh giá luồng dữ liệu. [Flask url_for](https://flask.palletsprojects.com/en/stable/api/#flask.url_for) |
+| Cookie trên phản hồi Flask | CWE-614 khi `set_cookie()` bỏ trống `secure` hoặc đặt `secure=False` trên phản hồi từ `make_response()`, `Response()` hoặc `redirect()`. | Đặt `secure=True` cho cookie nhạy cảm và kiểm tra header `Set-Cookie` ở môi trường triển khai. Khi đối số truyền gián tiếp qua `*args`, `**kwargs` hoặc có cấu hình `partitioned`, cần kiểm tra thủ công nếu chưa xác định được cờ Secure. [Flask Security Considerations](https://flask.palletsprojects.com/en/stable/web-security/#set-cookie-options) |
+| `hashlib` trong Python | CWE-327 với `md5()`, `sha1()` và `new()` nhận tên thuật toán literal. Semgrep nhận cả import alias; bỏ qua khi lời gọi khai báo `usedforsecurity=False`. Bước rà ngữ cảnh Python lọc mẫu hàm SHA-1 riêng chỉ được dùng làm digest HMAC cho ItsDangerous trong mô-đun. | Kiểm tra vai trò của digest trước khi đổi thuật toán. Với mật khẩu, dùng hàm băm mật khẩu riêng. [Python hashlib](https://docs.python.org/3/library/hashlib.html) · [ItsDangerous](https://itsdangerous.palletsprojects.com/en/stable/concepts/#digest-method-security) |
+| Tệp tạm Python | CWE-377 khi gọi `tempfile.mktemp()`. Semgrep nhận cả import alias. | Dùng `NamedTemporaryFile()` hoặc `mkstemp()` để tạo tệp nguyên tử. Đánh giá thư mục và cách mở tệp thực tế. [Python tempfile](https://docs.python.org/3/library/tempfile.html#tempfile.mktemp) |
+| HTTPS client Python | CWE-295 khi gọi `ssl._create_unverified_context()`. Semgrep nhận cả import alias. | Dùng `ssl.create_default_context()` và cấu hình CA tin cậy. Kiểm tra context thực tế tại kết nối. [PEP 476](https://peps.python.org/pep-0476/#opting-out) |
+| Giá trị giả ngẫu nhiên Python | CWE-338 với các lời gọi bộ sinh mặc định của `random`; Semgrep nhận cả import alias. | Truy vết xem kết quả có dùng trong xác thực hoặc mật mã. Dùng `secrets` cho mục đích bảo mật. [Python secrets](https://docs.python.org/3/library/secrets.html) |
+| Java Servlet | Bổ sung nguồn cookies, headers, query string và bản đồ tham số. Thêm đường dẫn tới API đọc file (CWE-22) và dữ liệu ghi trực tiếp vào phản hồi có MIME `text/html` (CWE-79). | Giới hạn đường dẫn trong thư mục cho phép và mã hóa đầu ra đúng ngữ cảnh. [Jakarta Servlet Request](https://jakarta.ee/specifications/servlet/6.1/apidocs/jakarta.servlet/jakarta/servlet/http/HttpServletRequest.html) · [Java Files](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Files.html) |
 
 ### Phạm vi và cách kiểm chứng
 
-Semgrep CE phân tích luồng trong từng hàm. Một số mẫu dựa trên tên biến như `req`, `request`, `db` và `stmt`. Dữ liệu qua nhiều hàm, API ngoài mẫu, kiểm tra đầu vào tự viết và điều kiện phân quyền cần xem xét riêng. Rule Dockerfile kiểm tra các chỉ thị viết trên một dòng và dùng tên base image để nhận diện một số mặc định. Lượt quét mặc định giới hạn 2.000 file, 1 MiB mỗi file, 20 MiB mã nguồn đã chọn và 90 giây cho Semgrep. Xem số **đã phân tích / đã chọn** theo ngôn ngữ hoặc loại cấu hình và thông báo lỗi để biết phần nào chưa được kiểm tra. JSON lưu thống kê này trong `stats.sourceAnalysis.languages`. [Phạm vi phân tích luồng của Semgrep](https://semgrep.dev/docs/writing-rules/glossary)
+Semgrep CE phân tích luồng trong từng hàm. Một số mẫu dựa trên tên biến như `req`, `request`, `db` và `stmt`. Dữ liệu qua nhiều hàm, API ngoài mẫu, kiểm tra đầu vào tự viết và điều kiện phân quyền cần xem xét riêng. Rule Dockerfile kiểm tra các chỉ thị viết trên một dòng và dùng tên base image để nhận diện một số mặc định. Lượt quét mặc định giới hạn 2.000 file, 10 MiB mỗi file, 50 MiB mã nguồn đã chọn và 90 giây cho Semgrep. Xem số **đã phân tích / đã chọn** theo ngôn ngữ hoặc loại cấu hình và thông báo lỗi để biết phần nào chưa được kiểm tra. JSON lưu thống kê này trong `stats.sourceAnalysis.languages`. [Phạm vi phân tích luồng của Semgrep](https://semgrep.dev/docs/writing-rules/glossary)
 
-Dùng quét nhanh để rà soát manifest dependency, secret và chữ ký cấu hình như TLS, cookie hoặc debug. Với cảnh báo Semgrep, kiểm tra nguồn dữ liệu, cách bảo vệ và việc API thực sự được gọi trong môi trường triển khai trước khi xác nhận lỗ hổng.
+Cả hai chế độ kiểm tra manifest dependency. Quét nhanh cũng rà soát secret và chữ ký cấu hình như TLS, cookie hoặc debug. Với cảnh báo Semgrep, kiểm tra nguồn dữ liệu, cách bảo vệ và việc API thực sự được gọi trong môi trường triển khai trước khi xác nhận lỗ hổng.
 
 ```powershell
 npm run benchmark:semgrep
 npm run test:coverage
 ```
 
-Benchmark đo 85 cặp mã mẫu theo CWE tương ứng. Quét sâu phát hiện 85/85 mẫu có lỗi và cảnh báo 0/85 mẫu đã sửa. Quét nhanh lần lượt là 27/85 và 9/85. Trong 8 cặp mới, quét sâu phát hiện cả 8 mẫu lỗi, gồm 6 mẫu quét nhanh bỏ sót. Số đo áp dụng cho bộ mẫu này. [Kết quả benchmark](testing/semgrep.tdd.md)
+Benchmark Semgrep đo 108 cặp mã mẫu theo CWE tương ứng, gồm 91 cặp nội bộ và 17 cặp mở rộng Python. Quét sâu phát hiện 108/108 mẫu có lỗi và cảnh báo 0/108 mẫu đã sửa. Quét nhanh lần lượt là 28/108 và 1/108. [Kết quả trên bộ mẫu nội bộ và OWASP](testing/accuracy.md)
 
 ## Quét nhanh
 
@@ -129,8 +152,11 @@ Mã định nghĩa nằm trong [src/source.mjs](../src/source.mjs).
 | `SRC-XSS` | [CWE-79](https://cwe.mitre.org/data/definitions/79.html) | Điểm xuất HTML như `innerHTML`, `document.write` hoặc phản hồi có request. Kiểm tra vị trí chèn và encoding theo ngữ cảnh. |
 | `SRC-DESERIALIZE` | [CWE-502](https://cwe.mitre.org/data/definitions/502.html) | Lời gọi `pickle.load(s)`, `unserialize` hoặc một số dạng `yaml.load`. Kiểm tra nguồn dữ liệu và loader. |
 | `SRC-TLS-VERIFY` | [CWE-295](https://cwe.mitre.org/data/definitions/295.html) | Tùy chọn tắt xác minh chứng chỉ trong Node, Python hoặc cURL. Kiểm tra cấu hình được dùng lúc kết nối. |
+| `SRC-PY-TLS-CONTEXT` | [CWE-295](https://cwe.mitre.org/data/definitions/295.html) | Nhận lời gọi trực tiếp `ssl._create_unverified_context()` trong Python. Xác minh cách context được dùng. |
+| `SRC-PY-INSECURE-COOKIE` | [CWE-614](https://cwe.mitre.org/data/definitions/614.html) | Nhận `secure=False` trong lời gọi `set_cookie()` cùng hoặc khác dòng khi tìm thấy lời gán gần đó từ hàm tạo phản hồi Flask. Kiểm tra header trên môi trường triển khai. |
+| `SRC-PY-WEAK-RANDOM` | [CWE-338](https://cwe.mitre.org/data/definitions/338.html) | Nhận lời gọi trực tiếp tới các hàm của bộ sinh mặc định `random`. Kiểm tra giá trị có được dùng vào mục đích bảo mật hay không. |
 | `SRC-DEBUG` | [CWE-489](https://cwe.mitre.org/data/definitions/489.html) | Cờ debug bật. Kiểm tra môi trường triển khai và chi tiết có thể lộ. |
-| `SRC-HASH` | [CWE-327](https://cwe.mitre.org/data/definitions/327.html) | MD5 hoặc SHA-1. Kiểm tra mục đích bảo mật của giá trị hash. |
+| `SRC-HASH` | [CWE-327](https://cwe.mitre.org/data/definitions/327.html) | MD5 hoặc SHA-1, kể cả tên literal truyền vào `hashlib.new()`. Bỏ qua chỉ dấu `usedforsecurity=False` trên cùng dòng trong Python. Kiểm tra mục đích bảo mật của digest. |
 | `SRC-SECRET` | [CWE-798](https://cwe.mitre.org/data/definitions/798.html) | Literal, biến cấu hình hoặc token có dạng credential. Xác minh trên máy và kiểm tra giá trị còn hiệu lực. |
 | `SRC-PRIVATE-KEY` | [CWE-321](https://cwe.mitre.org/data/definitions/321.html) | Dấu đầu PEM của private key. Xác minh key thuộc fixture hay môi trường đang dùng. |
 

@@ -30,6 +30,20 @@ test('ZIP upload is extracted with bounded output and dependency exclusions', as
   assert.equal(upload.files, 1);
   assert.match(await readFile(path.join(upload.rootDir, 'app', 'server.py'), 'utf8'), /eval/);
 });
+test('ZIP accepts large source files and excludes test code before applying size limits', async (t) => {
+  const mib = 1024 * 1024;
+  const large = new Uint8Array(5 * mib).fill(32);
+  const entries = Object.fromEntries(Array.from({ length: 5 }, (_, i) => [`project/src/app-${i}.js`, large]));
+  const upload = await prepareZipUpload(zipContent({
+    ...entries,
+    'project/src/app.spec.ts': new Uint8Array(11 * mib),
+    'project/tests/support.js': strToU8('export const sample = 1;'),
+  }));
+  t.after(() => rm(upload.rootDir, { recursive: true, force: true }));
+  assert.equal(upload.files, 5);
+  assert.equal(upload.bytes, 25 * mib);
+  assert.deepEqual(upload.warnings, []);
+});
 test('upload rejects escaping paths, duplicate paths, invalid archives and excessive expansion', async () => {
   for (const name of ['../outside.js', '/tmp/outside.js', 'C:\\outside.js', 'a/../../outside.js', 'a\\..\\outside.js', 'a/CON.js']) {
     await assert.rejects(prepareZipUpload(zipContent({ [name]: strToU8('eval(input)') })));

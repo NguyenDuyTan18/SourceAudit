@@ -82,6 +82,28 @@ test('source supports single files, Python, PHP, config and private-key detectio
   assert.equal(single.stats.filesScanned, 1);
 });
 
+test('quick and deep scans exclude test paths and accept source above the old size limits', async (t) => {
+  const root = await fixture(t);
+  await mkdir(path.join(root, 'tests'));
+  await writeFile(path.join(root, 'tests', 'support.js'), 'const sample = 1;');
+  await writeFile(path.join(root, 'app.spec.ts'), 'const sample = 1;');
+  const files = ['contest.js', 'server.js', 'routes.js', 'models.js', 'views.js'];
+  const source = 'const sample = 1;\n' + (' '.repeat(4096) + '\n').repeat(1024);
+  for (const file of files) await writeFile(path.join(root, file), source);
+
+  const quick = await scanSource(root);
+  assert.equal(quick.stats.filesScanned, files.length);
+  assert.equal(quick.stats.filesSkipped, 2);
+  assert.deepEqual(quick.errors, []);
+
+  const deep = await scanSource(root, { analysis: 'deep', semgrepRunner: async (sources) => {
+    assert.deepEqual(sources.map(({ file }) => file), files.toSorted());
+    return { status: 'complete', scanned: sources.length, findings: [] };
+  } });
+  assert.equal(deep.stats.filesScanned, files.length);
+  assert.deepEqual(deep.errors, []);
+});
+
 test('shell exec is not mislabeled as JavaScript code eval', async (t) => {
   const root = await fixture(t);
   await writeFile(path.join(root, 'app.js'), 'child_process.exec(req.query.cmd);');

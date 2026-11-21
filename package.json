@@ -14,7 +14,9 @@
     "start": "node ui.mjs",
     "test": "node --test",
     "test:coverage": "node --experimental-test-coverage --test-coverage-include=src/*.mjs --test-coverage-lines=80 --test",
-    "scan": "node scan.mjs"
+    "scan": "node scan.mjs",
+    "benchmark": "node scripts/benchmark.mjs",
+    "benchmark:check": "node scripts/benchmark.mjs --fetch --check benchmarks/baseline.json"
   },
   "dependencies": {
     "@babel/parser": "7.29.13",

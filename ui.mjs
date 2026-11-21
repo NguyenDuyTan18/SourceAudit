@@ -1,17 +1,23 @@
 import { createUiServer } from './src/ui-server.mjs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { access, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const root = fileURLToPath(new URL('./', import.meta.url));
+const accountFile = path.join(root, '.scanner-auth', 'owner.json');
+const remoteEnabled = process.env.SRCAUDIT_ENABLE_REMOTE === '1';
 let publicAccess;
-try { publicAccess = JSON.parse(await readFile(path.join(root, '.ui-public.json'), 'utf8')); }
-catch (error) {
-  if (error.code !== 'ENOENT') { console.error('Không đọc được cấu hình public .ui-public.json.'); process.exit(1); }
+if (remoteEnabled) {
+  try { publicAccess = JSON.parse(await readFile(path.join(root, '.ui-public.json'), 'utf8')); }
+  catch { console.error('Không đọc được cấu hình public .ui-public.json.'); process.exit(1); }
 }
 let server;
 try {
-  server = createUiServer({ rootDir: root, publicAccess, accountFile: path.join(root, '.scanner-auth', 'owner.json') });
+  const localOwnerWorkspace = !remoteEnabled && await access(accountFile).then(() => true, (error) => {
+    if (error.code !== 'ENOENT') throw error;
+    return false;
+  });
+  server = createUiServer({ rootDir: root, publicAccess, accountFile: remoteEnabled ? accountFile : undefined, localOwnerWorkspace });
 } catch {
   console.error('Cấu hình giao diện không hợp lệ. Kiểm tra origin HTTPS và thông tin đăng nhập public nếu có.');
   process.exit(1);

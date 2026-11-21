@@ -34,6 +34,7 @@ console.log(`CISA KEV ${kevSource.catalogVersion}: ${kev.length}`);
 let previous = {};
 try { previous = JSON.parse(await readFile(path.join(output, 'extensions.json'), 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
 const advisoryMap = new Map((previous.advisories || []).map((record) => [record.id, record]));
+const startingAdvisories = new Set(advisoryMap.keys());
 const packageGroups = [
   ['npm', 3, ['next', 'lodash', 'axios', 'express', 'ejs', 'jsonwebtoken', 'dompurify', 'jquery', 'handlebars', 'qs', 'multer', 'vite', 'webpack', 'path-to-regexp', 'react-router', 'fastify', 'pug', 'underscore', 'sanitize-html']],
   ['pip', 3, ['django', 'flask', 'werkzeug', 'requests', 'urllib3', 'jinja2', 'pyyaml', 'starlette', 'fastapi', 'aiohttp', 'pillow', 'cryptography', 'python-jose', 'pyjwt', 'sqlparse']],
@@ -59,10 +60,37 @@ for (const [ecosystem, pages, names] of packageGroups) {
   }
   console.log(`Targeted advisory records after ${ecosystem}: ${advisoryMap.size}`);
 }
+
+// The scanner resolves these ecosystems locally. Collect public, reviewed metadata independently of the scan target.
+for (const ecosystem of ['npm', 'pip', 'composer']) {
+  const query = new URLSearchParams({ type: 'reviewed', ecosystem, per_page: '100', sort: 'updated', direction: 'desc' });
+  let url = 'https://api.github.com/advisories?' + query;
+  for (let page = 0; page < 6 && url; page++) {
+    try {
+      const response = await download(url);
+      for (const record of JSON.parse(response.buffer)) {
+        if (record.withdrawn_at || record.type !== 'reviewed' || !/^GHSA-[a-z0-9-]+$/.test(record.ghsa_id)) continue;
+        const existing = advisoryMap.get(record.ghsa_id);
+        if (existing && existing.updatedAt >= record.updated_at) continue;
+        const vulnerabilities = record.vulnerabilities.filter((entry) => entry.package?.name && entry.vulnerable_version_range)
+          .map((entry) => ({ ecosystem: entry.package.ecosystem, name: entry.package.name, range: entry.vulnerable_version_range, fixed: entry.first_patched_version }));
+        if (!vulnerabilities.length) continue;
+        advisoryMap.set(record.ghsa_id, {
+          id: record.ghsa_id, kind: 'advisory', cve: record.cve_id, name: record.summary,
+          description: '', severity: record.severity, cwes: (record.cwes || []).map((entry) => entry.cwe_id),
+          publishedAt: record.published_at, updatedAt: record.updated_at,
+          references: [`https://github.com/advisories/${record.ghsa_id}`], vulnerabilities,
+        });
+      }
+      url = response.next;
+      if (url && new URL(url).origin !== 'https://api.github.com') throw new Error('Unexpected pagination destination');
+    } catch (error) { errors.push(String(error.message)); break; }
+  }
+}
 if (asvs.length < 300 || api.length < 10 || kev.length < 1000) throw new Error('Incomplete scenario sources; preserving previous extensions');
 for (const [filename, url] of [['ASVS-LICENSE.md', 'https://raw.githubusercontent.com/OWASP/ASVS/v5.0.0_release/LICENSE.md'], ['API-SECURITY-LICENSE.txt', `https://raw.githubusercontent.com/OWASP/API-Security/${apiCommit}/LICENSE`]]) await writeFile(path.join(output, filename), (await download(url)).buffer);
-const result = { schemaVersion: 1, builtAt: new Date().toISOString(), sources, errors, asvsVersion: '5.0.0', apiVersion: '2023', apiCommit, kevVersion: kevSource.catalogVersion, asvs, api, kev, advisories: [...advisoryMap.values()], selection: 'ASVS v5.0.0 requirements; API Security 2023 risks/scenarios at pinned commit; CISA KEV full public catalog; bounded reviewed advisories for a fixed public package allowlist. No private project inventory is transmitted.' };
+const result = { schemaVersion: 1, builtAt: new Date().toISOString(), sources, errors, asvsVersion: '5.0.0', apiVersion: '2023', apiCommit, kevVersion: kevSource.catalogVersion, asvs, api, kev, advisories: [...advisoryMap.values()], selection: 'ASVS v5.0.0 requirements, API Security 2023 at a pinned commit, the CISA KEV public catalog, reviewed advisories for a fixed public package list, and up to six recent pages of reviewed npm, PyPI and Composer advisories per ecosystem. No private project inventory is transmitted.' };
 await writeFile(path.join(output, 'extensions.pending.json'), JSON.stringify(result) + '\n');
 await rename(path.join(output, 'extensions.pending.json'), path.join(output, 'extensions.json'));
 await writeFile(path.join(output, 'extensions-manifest.json'), JSON.stringify({ ...result, asvs: asvs.length, api: api.length, kev: kev.length, advisories: advisoryMap.size }, null, 2));
-console.log(JSON.stringify({ asvs: asvs.length, api: api.length, kev: kev.length, targetedAdvisories: advisoryMap.size, errors }));
+console.log(JSON.stringify({ asvs: asvs.length, api: api.length, kev: kev.length, advisories: advisoryMap.size, newAdvisories: [...advisoryMap.keys()].filter((id) => !startingAdvisories.has(id)).length, errors }));

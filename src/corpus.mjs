@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 
 const base = JSON.parse(readFileSync(new URL('../data/corpus.json', import.meta.url), 'utf8'));
+const research = JSON.parse(readFileSync(new URL('../data/research.json', import.meta.url), 'utf8'));
+const references = JSON.parse(readFileSync(new URL('../data/references.json', import.meta.url), 'utf8'));
 let extension = {};
 try { extension = JSON.parse(readFileSync(new URL('../data/extensions.json', import.meta.url), 'utf8')); }
 catch (error) { if (error.code !== 'ENOENT') throw error; }
@@ -13,12 +15,13 @@ export const CORPUS = { ...base, advisories: [...advisoryMap.values()], asvs: ex
 const cweIndex = new Map(CORPUS.weaknesses.map((entry) => [entry.id, entry]));
 const kevIndex = new Map(CORPUS.kev.map((entry) => [entry.cve, entry]));
 const requirementIndex = new Map(CORPUS.asvs.map((entry) => [entry.id, entry]));
-const entries = [...CORPUS.weaknesses, ...CORPUS.wstg, ...CORPUS.advisories, ...CORPUS.asvs, ...CORPUS.api, ...CORPUS.kev];
+const entries = [...CORPUS.weaknesses, ...CORPUS.wstg, ...CORPUS.advisories, ...CORPUS.asvs, ...CORPUS.api, ...CORPUS.kev,
+  ...[...research, ...references].map((entry) => ({ ...entry, cwes: [] }))];
 const normalize = (value) => String(value).toLowerCase().normalize('NFKD').replace(/\p{Diacritic}/gu, '');
-const searchable = entries.map((entry) => normalize([entry.id, entry.cve, entry.name, entry.description, ...(entry.cwes || []), ...(entry.vulnerabilities || []).map((v) => v.name)].join(' ')));
+const searchable = entries.map((entry) => normalize([entry.id, entry.cve, entry.name, entry.description, entry.publication, ...(entry.tags || []), ...(entry.cwes || []), ...(entry.vulnerabilities || []).map((v) => v.name)].join(' ')));
 
 export function corpusStats() {
-  return { cwe: CORPUS.weaknesses.length, owasp: CORPUS.wstg.length, advisories: CORPUS.advisories.length, asvs: CORPUS.asvs.length, api: CORPUS.api.length, kev: CORPUS.kev.length, total: entries.length, builtAt: extension.builtAt || CORPUS.builtAt, baseBuiltAt: CORPUS.builtAt, cweVersion: CORPUS.cweVersion, wstgVersion: CORPUS.wstgVersion, asvsVersion: extension.asvsVersion, apiVersion: extension.apiVersion, kevVersion: extension.kevVersion, selection: CORPUS.selection + (extension.selection ? ' Extensions: ' + extension.selection : ''), sourceErrors: CORPUS.errors.length + (extension.errors || []).length };
+  return { cwe: CORPUS.weaknesses.length, owasp: CORPUS.wstg.length, advisories: CORPUS.advisories.length, asvs: CORPUS.asvs.length, api: CORPUS.api.length, kev: CORPUS.kev.length, research: research.length, references: references.length, total: entries.length, builtAt: extension.builtAt || CORPUS.builtAt, baseBuiltAt: CORPUS.builtAt, cweVersion: CORPUS.cweVersion, wstgVersion: CORPUS.wstgVersion, asvsVersion: extension.asvsVersion, apiVersion: extension.apiVersion, kevVersion: extension.kevVersion, selection: CORPUS.selection + (extension.selection ? ' Extensions: ' + extension.selection : ''), sourceErrors: CORPUS.errors.length + (extension.errors || []).length };
 }
 export function contextForCwe(id) { return cweIndex.get(id); }
 export function knownExploited(cve) { return kevIndex.get(cve); }

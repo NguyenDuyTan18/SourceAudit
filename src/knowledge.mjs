@@ -1,13 +1,13 @@
-import { readFile, mkdir, writeFile, readdir, stat } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
+import { readFile, mkdir, writeFile, readdir, stat, rename, rm } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { SEVERITIES, safeUrl } from './report.mjs';
 import { searchCorpus, relatedContext, verificationRequirements } from './corpus.mjs';
 
 const academy = 'https://portswigger.net/web-security/';
 const owasp = 'https://cheatsheetseries.owasp.org/cheatsheets/';
-function topic(id, name, cwes, keywords, references, reviewSteps) {
-  return { id, name, cwes, keywords, references, reviewSteps, reviewedAt: '2026-11-05', detection: 'Heuristic; phải kiểm chứng luồng dữ liệu và biện pháp bảo vệ trước khi kết luận.' };
+function topic(id, name, cwes, keywords, references, reviewSteps, { reviewedAt = '2026-11-05', ruleIds } = {}) {
+  return { id, name, cwes, keywords, references, reviewSteps, reviewedAt, ruleIds, detection: 'Heuristic; phải kiểm chứng luồng dữ liệu và biện pháp bảo vệ trước khi kết luận.' };
 }
 
 export const KNOWLEDGE = [
@@ -22,7 +22,17 @@ export const KNOWLEDGE = [
   topic('xxe', 'XML external entity', ['CWE-611'], ['xxe', 'external entity', 'resolve_entities'], [academy + 'xxe'], ['Kiểm tra cấu hình XML parser có cho DTD/external entity.', 'Đánh giá network/file access của parser; cấu hình thư viện theo phiên bản.']),
   topic('jwt', 'JWT signature validation', ['CWE-347'], ['jwt', 'json web token', 'verify_signature'], [academy + 'jwt'], ['Kiểm tra có xác minh chữ ký và allowlist thuật toán.', 'Kiểm tra issuer, audience, thời hạn; decode không tương đương verify.']),
   topic('secrets', 'Embedded credentials / private keys', ['CWE-798', 'CWE-321'], ['hardcoded secret', 'credential', 'private key', 'api key'], [owasp + 'Secrets_Management_Cheat_Sheet.html'], ['Xác minh chuỗi là credential thật hay fixture.', 'Nếu thật: revoke/rotate, kiểm tra lịch sử và quyền truy cập.']),
-  topic('access-control', 'Broken access control / IDOR', ['CWE-639', 'CWE-862'], ['idor', 'bola', 'access control', 'authorization'], [academy + 'access-control'], ['Cần ít nhất hai danh tính và dữ liệu được phép kiểm thử.', 'Kiểm tra quyền ở server trên từng đối tượng/hành động.', 'Tool hiện chỉ cung cấp hướng kiểm tra; không tự xác nhận IDOR từ URL.'])
+  topic('access-control', 'Broken access control / IDOR', ['CWE-639', 'CWE-862'], ['idor', 'bola', 'access control', 'authorization'], [academy + 'access-control'], ['Cần ít nhất hai danh tính và dữ liệu được phép kiểm thử.', 'Kiểm tra quyền ở server trên từng đối tượng/hành động.', 'Tool hiện chỉ cung cấp hướng kiểm tra; không tự xác nhận IDOR từ URL.']),
+  topic('weak-digest', 'Hàm băm MD5 và SHA-1', ['CWE-328'], ['hashlib', 'md5', 'sha1', 'usedforsecurity', 'weak hash'],
+    ['https://docs.python.org/3/library/hashlib.html', owasp + 'Password_Storage_Cheat_Sheet.html', 'https://itsdangerous.palletsprojects.com/en/stable/concepts/#digest-method-security'],
+    ['Xác định digest dùng trực tiếp, làm checksum, làm bên trong HMAC hay để lưu mật khẩu. Mỗi trường hợp có điều kiện bảo mật riêng.', 'Kiểm tra phiên bản hoặc giao thức có bắt buộc thuật toán cũ hay không. Lập kế hoạch đổi thuật toán nếu digest tham gia quyết định bảo mật.', 'Với mật khẩu, dùng hàm băm mật khẩu có tham số chi phí phù hợp.'],
+    { reviewedAt: '2026-11-21', ruleIds: ['SRC-HASH', 'srcaudit-python-weak-hashlib'] }),
+  topic('tls-validation', 'Xác minh chứng chỉ và hostname TLS', ['CWE-295'], ['tls', 'certificate verification', 'sslcontext', 'create_unverified_context'],
+    ['https://docs.python.org/3/library/ssl.html#security-considerations', 'https://peps.python.org/pep-0476/'],
+    ['Truy vết context hoặc HTTP client được dùng cho kết nối thực tế.', 'Kiểm tra cả chuỗi chứng chỉ và hostname từ cấu hình triển khai.', 'Với CA nội bộ, nạp CA được tin cậy và giữ xác minh danh tính máy chủ.'], { reviewedAt: '2026-11-21' }),
+  topic('temporary-files', 'Tạo tệp tạm an toàn', ['CWE-377'], ['tempfile', 'mktemp', 'mkstemp', 'namedtemporaryfile', 'temporary file'],
+    ['https://docs.python.org/3/library/tempfile.html#tempfile.mktemp'],
+    ['Xác minh ứng dụng có dùng tên trả về để mở tệp sau đó không.', 'Kiểm tra quyền ghi vào thư mục tạm và quyền truy cập tệp.', 'Tạo tệp nguyên tử và dùng handle trả về; đóng và dọn tệp theo vòng đời của ứng dụng.'], { reviewedAt: '2026-11-21' })
 ];
 
 export function searchKnowledge(query = '') {
@@ -38,13 +48,18 @@ async function readBounded(file, maxBytes = 1024 * 1024) {
   return text;
 }
 
-export async function importWriteup(file, directory) {
+export class WriteupLimitError extends Error {}
+
+const WRITEUP_FILE = /^writeup-[a-f0-9]{16}\.json$/;
+
+export async function importWriteup(file, directory, { maxEntries = Infinity } = {}) {
   if (!['.md', '.txt'].includes(path.extname(file).toLowerCase())) throw new Error('Write-up phải là .md hoặc .txt.');
   const text = await readBounded(file);
   const lower = text.toLowerCase();
   const topics = KNOWLEDGE.filter((entry) => entry.keywords.some((keyword) => lower.includes(keyword))).map((entry) => entry.id);
   const references = [];
   for (const match of text.matchAll(/https:\/\/[^\s<>"')\]]+/g)) {
+    if (match[0].length > 2048) continue;
     try {
       // Remove URL query and fragment entirely; preserve no embedded credentials.
       const url = new URL(match[0]);
@@ -57,15 +72,24 @@ export async function importWriteup(file, directory) {
   const digest = createHash('sha256').update(text).digest('hex');
   const entry = { id: digest.slice(0, 16), sha256: digest, importedAt: new Date().toISOString(), topics, references, note: 'Chỉ lưu topic và URL tham khảo, không lưu nội dung gốc. Topic không tạo rule mới và không xác nhận lỗ hổng.' };
   await mkdir(directory, { recursive: true });
-  const output = path.resolve(directory, `writeup-${entry.id}.json`);
-  await writeFile(output, JSON.stringify(entry, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 });
+  const name = 'writeup-' + entry.id + '.json';
+  const output = path.resolve(directory, name);
+  if (Number.isFinite(maxEntries)) {
+    const existing = (await readdir(directory)).filter((item) => WRITEUP_FILE.test(item));
+    if (existing.length >= maxEntries && !existing.includes(name)) throw new WriteupLimitError('Tài khoản đã đạt giới hạn lưu write-up.');
+  }
+  const temporary = output + '.' + randomUUID() + '.tmp';
+  try {
+    await writeFile(temporary, JSON.stringify(entry, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 });
+    await rename(temporary, output);
+  } finally { await rm(temporary, { force: true }).catch(() => {}); }
   return { ...entry, file: output };
 }
 
 export async function loadWriteups(directory) {
   const entries = [];
   if (!directory) return entries;
-  for (const name of (await readdir(directory)).filter((n) => /^writeup-[a-f0-9]{16}\.json$/.test(n)).slice(0, 200)) {
+  for (const name of (await readdir(directory)).filter((n) => WRITEUP_FILE.test(n)).slice(0, 200)) {
     const entry = JSON.parse(await readBounded(path.join(directory, name)));
     if (!Array.isArray(entry.topics) || !Array.isArray(entry.references) || entry.topics.some((id) => !KNOWLEDGE.some((k) => k.id === id))) throw new Error('Write-up index không hợp lệ.');
     entries.push({ id: name, topics: entry.topics, references: entry.references.filter((url) => typeof url === 'string' && /^https:\/\//.test(url)).slice(0, 30).map(safeUrl) });
@@ -73,9 +97,9 @@ export async function loadWriteups(directory) {
   return entries;
 }
 
-export function enrichReport(report, writeups = []) {
+export function enrichReport(report, writeups = [], { maxWriteups = Infinity, maxReferences = Infinity } = {}) {
   for (const finding of report.findings) {
-    const entry = KNOWLEDGE.find((item) => item.cwes.includes(finding.cwe));
+    const entry = KNOWLEDGE.find((item) => item.ruleIds?.includes(finding.ruleId) || item.cwes.includes(finding.cwe));
     const context = relatedContext(finding.cwe);
     if (!entry && !context.weakness) continue;
     finding.knowledge = { topic: entry?.id || finding.cwe,
@@ -86,7 +110,8 @@ export function enrichReport(report, writeups = []) {
       verificationRequirements: verificationRequirements(finding.detection?.asvs || []).map(({ id, description, references, level }) => ({ id, description, references, level })),
       apiScenarios: context.apiScenarios.map(({ id, name, references }) => ({ id, name, references })),
       advisoryExamples: context.examples.map(({ id, cve, name, references }) => ({ id, cve, name, references: references.slice(0, 1), role: 'context-only-not-a-match' })),
-      relatedWriteups: writeups.filter((w) => entry && w.topics.includes(entry.id)).map((w) => ({ id: w.id, references: w.references })) };
+      relatedWriteups: writeups.filter((w) => entry && w.topics.includes(entry.id)).slice(0, maxWriteups)
+        .map((w) => ({ id: w.id, references: w.references.slice(0, maxReferences) })) };
   }
   return report;
 }

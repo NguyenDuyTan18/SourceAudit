@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import { zipSync, strToU8 } from 'fflate';
 import { createUiServer } from '../src/ui-server.mjs';
+import { MAX_ZIP_BYTES, MIB } from '../src/scan-scope.mjs';
 
 function zipPayload(files = { 'app.js': 'eval(req.query.code);' }, options = {}) {
   const entries = Object.fromEntries(Object.entries(files).map(([name, text]) => [name, strToU8(text)]));
@@ -42,11 +43,17 @@ test('UI serves application assets and applies local-session boundaries', async 
   const ui = await setup(t);
   assert.match(ui.page, /Kiểm tra bảo mật/);
   assert.equal((await fetch(ui.origin + '/app.js')).status, 200);
+  assert.match((await ui.get('/scan-scope.js')).headers.get('content-type'), /javascript/);
   assert.equal((await fetch(ui.origin + '/style.css')).status, 200);
   const health = await (await fetch(ui.origin + '/api/health')).json();
   assert.equal(health.application, 'security-scanner-ui');
   assert.equal((await fetch(ui.origin + '/api/bootstrap')).status, 403);
   assert.equal((await fetch(ui.origin + '/api/bootstrap', { headers: { ...ui.headers, Origin: 'https://foreign.example' } })).status, 403);
+  assert.equal((await ui.get('/login')).status, 404);
+  assert.equal((await ui.get('/register')).status, 404);
+  for (const name of ['Forwarded', 'X-Forwarded-For', 'X-Forwarded-Proto']) {
+    assert.equal((await fetch(ui.origin, { headers: { [name]: '127.0.0.1' } })).status, 403);
+  }
   const forgedHostStatus = await new Promise((resolve, reject) => {
     const request = http.get(ui.origin, { headers: { Host: 'evil.example' } }, (response) => { response.resume(); resolve(response.statusCode); });
     request.on('error', reject);
@@ -57,9 +64,27 @@ test('UI serves application assets and applies local-session boundaries', async 
   assert.equal((await ui.get('/api/reports/not-a-job/html')).status, 404);
   const bootstrap = await (await ui.get('/api/bootstrap')).json();
   assert.ok(bootstrap.sourceRules.length >= 50);
-  assert.equal(bootstrap.knowledge.length, 12);
+  assert.ok(['weak-digest', 'tls-validation', 'temporary-files'].every((id) => bootstrap.knowledge.some((entry) => entry.id === id)));
   assert.ok(bootstrap.sourceExtensions.includes('.js'));
   assert.equal(bootstrap.uploadSchema, 1);
+});
+
+test('local owner workspace restores the old owner history without login', async (t) => {
+  const rootDir = await mkdtemp(path.join(tmpdir(), 'scanner-ui-owner-workspace-'));
+  t.after(() => rm(rootDir, { recursive: true, force: true }));
+  const jobs = [
+    { ownerId: 'owner', id: '00000000-0000-4000-8000-000000000001' },
+    { ownerId: 'local', id: '00000000-0000-4000-8000-000000000002' },
+  ];
+  for (const job of jobs) {
+    const directory = path.join(rootDir, '.scanner-reports', `user-${job.ownerId}`, job.id);
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, 'meta.json'), JSON.stringify({ ...job, status: 'done', startedAt: new Date().toISOString() }));
+  }
+  const ui = await setup(t, { rootDir, localOwnerWorkspace: true });
+  assert.match(ui.page, /Kiểm tra bảo mật/);
+  const history = await (await ui.get('/api/history')).json();
+  assert.deepEqual(history.map(({ id }) => id), [jobs[0].id]);
 });
 
 test('UI permits opening the home page from an external link while keeping API boundaries', async (t) => {
@@ -198,22 +223,26 @@ test('UI uses deep source analysis only when selected for a ZIP', async (t) => {
   const files = {
     'project/.github/workflows/check.yml': 'jobs: {}',
     'project/Dockerfile': 'FROM scratch',
+    'project/Dockerfile.prod': 'FROM scratch',
     'project/config/check.yaml': 'jobs: {}',
     'src/index.ts': 'eval(req.query.code);',
+    'src/index.test.ts': 'const sample = 1;',
+    'project/tests/support.js': 'const sample = 1;',
     ...Object.fromEntries(['py', 'php', 'java', 'go', 'cs', 'rb'].map((ext) => ['src/example.' + ext, 'sample'])),
   };
   const quick = await ui.post('/api/upload', zipPayload(files));
   const quickJob = await waitForJob(ui, (await quick.json()).id);
   assert.ok(quickJob.report.findings.some(({ ruleId }) => ruleId === 'SRC-EVAL'));
+  assert.equal(quickJob.report.stats.uploadedFiles, Object.keys(files).length - 2);
   assert.deepEqual(calls, []);
 
   const deep = await ui.post('/api/upload', zipPayload(files, { sourceAnalysis: 'deep' }));
   assert.equal(deep.status, 202);
   const deepJob = await waitForJob(ui, (await deep.json()).id);
   assert.equal(deepJob.report.stats.sourceAnalysis.status, 'complete');
-  assert.equal(deepJob.report.stats.sourceAnalysis.scanned, 9);
+  assert.equal(deepJob.report.stats.sourceAnalysis.scanned, 10);
   assert.deepEqual(calls, [[
-    'project/.github/workflows/check.yml', 'project/Dockerfile',
+    'project/.github/workflows/check.yml', 'project/Dockerfile', 'project/Dockerfile.prod',
     ...['cs', 'go', 'java', 'php', 'py', 'rb'].map((ext) => 'src/example.' + ext),
     'src/index.ts',
   ]]);
@@ -237,7 +266,8 @@ test('UI validates input, limits request bodies and recovers after failed jobs',
   assert.equal((await ui.post('/api/upload', {})).status, 400);
   assert.equal((await fetch(ui.origin + '/api/upload', { method: 'POST', headers: { 'X-Session-Token': ui.token }, body: '{}' })).status, 415);
   assert.equal((await fetch(ui.origin + '/api/upload', { method: 'POST', headers: ui.headers, body: '{' })).status, 400);
-  assert.equal((await fetch(ui.origin + '/api/upload', { method: 'POST', headers: ui.headers, body: ' '.repeat(30 * 1024 * 1024 + 1) })).status, 413);
+  const oversizedBody = ' '.repeat(Math.ceil(MAX_ZIP_BYTES / 3) * 4 + MIB);
+  assert.equal((await fetch(ui.origin + '/api/upload', { method: 'POST', headers: ui.headers, body: oversizedBody })).status, 413);
   const start = await ui.post('/api/upload', { upload: { archive: { content: 'bm90IHppcA==' } } });
   const job = await waitForJob(ui, (await start.json()).id);
   assert.equal(job.status, 'failed');
@@ -246,6 +276,18 @@ test('UI validates input, limits request bodies and recovers after failed jobs',
   const retry = await ui.post('/api/upload', zipPayload());
   assert.equal(retry.status, 202);
   assert.equal((await waitForJob(ui, (await retry.json()).id)).status, 'done');
+});
+
+test('UI accepts ZIP and request sizes beyond the old limits', async (t) => {
+  const ui = await setup(t, { semgrepRunner: async (files) => ({ status: 'complete', scanned: files.length, findings: [] }) });
+  const large = new Uint8Array(5 * MIB).fill(32);
+  const entries = Object.fromEntries(Array.from({ length: 5 }, (_, i) => [`src/app-${i}.js`, large]));
+  const content = Buffer.from(zipSync(entries, { level: 0 })).toString('base64');
+  const start = await ui.post('/api/upload', { upload: { archive: { content } }, sourceAnalysis: 'deep' });
+  assert.equal(start.status, 202);
+  const job = await waitForJob(ui, (await start.json()).id, 300);
+  assert.equal(job.status, 'done');
+  assert.equal(job.report.stats.sourceAnalysis.scanned, 5);
 });
 
 test('UI refuses concurrent source scans', async (t) => {
@@ -326,4 +368,25 @@ test('UI knowledge API searches real CVE and OWASP records with bounded pages an
   assert.equal(data.results[0].id, 'ASVS-v5.0.0-1.2.4');
   data = await (await ui.get('/api/knowledge?kind=kev&q=CVE-2020-11023')).json();
   assert.equal(data.results[0].kind, 'kev');
+});
+
+test('UI knowledge API exposes research summaries and primary sources', async (t) => {
+  const ui = await setup(t);
+  const response = await ui.get('/api/knowledge?kind=research');
+  assert.equal(response.status, 200);
+  const { total, results } = await response.json();
+  assert.ok(total >= 5);
+  assert.ok(results.every((entry) => entry.kind === 'research' && entry.reviewSteps.length >= 2 && entry.references.every((url) => url.startsWith('https://'))));
+  const search = await (await ui.get('/api/knowledge?kind=research&q=CodeQL')).json();
+  assert.ok(search.results.some(({ id }) => id === 'RESEARCH-SAST-CODEQL-2026'));
+});
+
+test('UI knowledge API separates technical references from research', async (t) => {
+  const ui = await setup(t);
+  const response = await ui.get('/api/knowledge?kind=reference&q=NIST');
+  assert.equal(response.status, 200);
+  const { results } = await response.json();
+  assert.deepEqual(results.map(({ id }) => id), ['REFERENCE-NIST-SSDF-1.1']);
+  assert.ok(results[0].reviewSteps.length >= 2);
+  assert.match(ui.page, /<option value="reference">Tài liệu kỹ thuật<\/option>/);
 });

@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { isSupportedSourceFile } from './source.mjs';
+import { isTestPath, MAX_SOURCE_FILE_BYTES, MAX_SOURCE_FILES, MAX_SOURCE_TOTAL_BYTES, MAX_ZIP_BYTES } from './scan-scope.mjs';
 
 const SKIP = new Set(['node_modules', '.git', '.venv', 'venv', 'vendor', 'dist', 'build', 'coverage', '.next', '__pycache__']);
 export class ZipInputError extends Error {}
@@ -22,18 +23,18 @@ function decode(value, maxBytes) {
 }
 
 export async function prepareZipUpload(content, limits = {}) {
-  const maxFileBytes = limits.maxFileBytes ?? 1024 * 1024;
-  const maxTotalBytes = limits.maxTotalBytes ?? 20 * 1024 * 1024;
-  const maxFiles = limits.maxFiles ?? 2000;
+  const maxFileBytes = limits.maxFileBytes ?? MAX_SOURCE_FILE_BYTES;
+  const maxTotalBytes = limits.maxTotalBytes ?? MAX_SOURCE_TOTAL_BYTES;
+  const maxFiles = limits.maxFiles ?? MAX_SOURCE_FILES;
   const files = new Map(); const warnings = []; let total = 0;
-  const accept = (name) => !name.split('/').some((piece) => SKIP.has(piece)) && isSupportedSourceFile(name);
+  const accept = (name) => !isTestPath(name) && !name.split('/').some((piece) => SKIP.has(piece)) && isSupportedSourceFile(name);
   function add(name, buffer) {
     const key = name.toLowerCase();
     if (files.has(key)) throw new ZipInputError('File upload trùng tên.');
     if (files.size >= maxFiles || total + buffer.length > maxTotalBytes) throw new ZipInputError('Upload vượt giới hạn file hoặc tổng dung lượng.');
     total += buffer.length; files.set(key, { name, buffer });
   }
-  const archive = decode(content, 20 * 1024 * 1024);
+  const archive = decode(content, MAX_ZIP_BYTES);
   if (archive.length < 22 || archive.readUInt32LE(0) !== 0x04034b50) throw new ZipInputError('File ZIP không hợp lệ.');
   let eocd = -1;
   for (let offset = archive.length - 22; offset >= Math.max(0, archive.length - 65557); offset--) {
@@ -61,7 +62,7 @@ export async function prepareZipUpload(content, limits = {}) {
   for (let offset = 0; offset < archive.length; offset += 1024) unzip.push(archive.subarray(offset, offset + 1024), offset + 1024 >= archive.length);
   if (openFiles) throw new ZipInputError('ZIP có file chưa giải nén hoàn tất.');
   if (!files.size) throw new ZipInputError('Không có file source được hỗ trợ trong upload.');
-  const rootDir = await mkdtemp(path.join(tmpdir(), 'scanner-source-'));
+  const rootDir = await mkdtemp(path.join(limits.temporaryDirectory ?? tmpdir(), 'scanner-source-'));
   try {
     for (const { name, buffer } of files.values()) {
       const destination = path.resolve(rootDir, ...name.split('/'));

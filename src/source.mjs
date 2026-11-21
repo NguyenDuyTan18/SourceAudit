@@ -4,16 +4,23 @@ import { createReport, finishReport, SEVERITIES } from './report.mjs';
 import { EXTENDED_RULES } from './extended-rules.mjs';
 import { SCENARIO_RULES } from './scenario-rules.mjs';
 import { analyzeFlow, FLOW_RULES } from './flow.mjs';
-import { extractDependencies, dependencyFindings } from './dependencies.mjs';
+import { extractDependencies, dependencyFindings, isDependencyManifest } from './dependencies.mjs';
 import { corpusStats } from './corpus.mjs';
 import { runSemgrep, semgrepLanguage, SEMGREP_RULE_COUNT } from './semgrep.mjs';
+import { isIgnored, parseGitignore } from './gitignore.mjs';
+import { applySuppressions, assignFingerprints, collectSuppressions } from './triage.mjs';
+import { pathKey } from './git-diff.mjs';
+import { filterWithAst } from './ast-filter.mjs';
+import { applyFileContext, classifySecret } from './context.mjs';
+import { isDockerfileName, isTestPath, MAX_SOURCE_FILE_BYTES, MAX_SOURCE_FILES, MAX_SOURCE_TOTAL_BYTES, MIB } from './scan-scope.mjs';
+import { explicitlyInsecureCookie } from './python-quick.mjs';
 
 const SKIP = new Set(['.git', '.svn', 'node_modules', '.venv', 'venv', '__pycache__', 'vendor', 'dist', 'build', 'coverage', '.next', '.scanner-reports', '.scanner-tools', '.scanner-auth']);
 const CODE_EXT = new Set(['.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx', '.py', '.php', '.java', '.cs', '.go', '.rb', '.html', '.htm', '.vue', '.svelte', '.astro', '.css', '.scss', '.sass', '.less', '.xml', '.svg', '.sql', '.graphql', '.gql', '.razor', '.cshtml', '.ejs', '.hbs', '.erb', '.jsp', '.kt', '.kts', '.rs', '.ex', '.exs', '.erl', '.dart', '.sh', '.ps1']);
 const CONFIG_EXT = new Set(['.json', '.yaml', '.yml', '.toml', '.ini', '.conf', '.config', '.properties', '.pem', '.key', '.env', '.lock', '.mod']);
 export const SUPPORTED_SOURCE_EXTENSIONS = [...CODE_EXT, ...CONFIG_EXT];
 export function isSupportedSourceFile(name) {
-  return CODE_EXT.has(path.extname(name).toLowerCase()) || CONFIG_EXT.has(path.extname(name).toLowerCase()) || path.basename(name).startsWith('.env') || path.basename(name) === 'Dockerfile' || /^requirements(?:[.-].*)?\.txt$/i.test(path.basename(name));
+  return CODE_EXT.has(path.extname(name).toLowerCase()) || CONFIG_EXT.has(path.extname(name).toLowerCase()) || path.basename(name).startsWith('.env') || isDockerfileName(path.basename(name)) || /^requirements(?:[.-].*)?\.txt$/i.test(path.basename(name));
 }
 const ref = (cwe) => `https://cwe.mitre.org/data/definitions/${cwe}.html`;
 const rules = [
@@ -24,13 +31,16 @@ const rules = [
   { id: 'SRC-XXE', cwe: 611, severity: 'medium', title: 'XML parser bật xử lý external entity', match: /\bresolve_entities\s*=\s*True\b|\bLIBXML_NOENT\b|\bXmlResolver\s*=\s*new\s+XmlUrlResolver/, impact: 'External entity có thể truy cập file hoặc mạng nếu parser và quyền runtime cho phép.', fix: 'Tắt DTD/external entity và network access theo cấu hình XML parser đang sử dụng.' },
   { id: 'SRC-JWT', cwe: 347, severity: 'high', title: 'JWT bị tắt kiểm tra chữ ký', match: /\bverify_signature["']?\s*[:=]\s*(?:False|false)\b|\bjwt\.decode\s*\([^\n]*\bverify\s*=\s*False/, impact: 'Nếu kết quả được dùng để xác thực/phân quyền, token không có chữ ký hợp lệ có thể được tin cậy.', fix: 'Verify chữ ký, allowlist thuật toán và kiểm tra issuer/audience/expiry trước khi dùng claim.' },
   { id: 'SRC-EVAL', cwe: 95, severity: 'high', title: 'Thực thi code động cần kiểm tra', match: /\b(?:eval|exec)\s*\(/, exts: ['.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx', '.py', '.php'], impact: 'Nếu đầu vào đến từ người dùng, có thể chạy code ngoài ý muốn.', fix: 'Thay eval/exec bằng parser hoặc thao tác tường minh; không truyền dữ liệu không tin cậy vào code động.' },
-  { id: 'SRC-SHELL', cwe: 78, severity: 'high', title: 'Gọi shell hoặc lệnh hệ thống cần kiểm tra', match: /\b(?:child_process\s*\.\s*exec|execSync|os\s*\.\s*system|shell_exec|passthru|system)\s*\(|\bshell\s*=\s*True\b|\b(?:exec|execFile)\s*\([^\n]*(?:req\.|request\.|\$_(?:GET|POST|REQUEST))/, impact: 'Đầu vào không tin cậy ghép vào lệnh có thể dẫn đến command injection.', fix: 'Dùng API không qua shell, truyền danh sách đối số; allowlist lệnh và tham số. Kiểm tra nguồn dữ liệu trước khi xác nhận.' },
+  { id: 'SRC-SHELL', cwe: 78, severity: 'high', title: 'Gọi shell hoặc lệnh hệ thống cần kiểm tra', match: /\b(?:child_process\s*\.\s*exec|execSync|os\s*\.\s*system|shell_exec|passthru|(?<![.\w])system)\s*\(|\bshell\s*=\s*True\b|\b(?:exec|execFile)\s*\([^\n]*(?:req\.|request\.|\$_(?:GET|POST|REQUEST))/, impact: 'Đầu vào không tin cậy ghép vào lệnh có thể dẫn đến command injection.', fix: 'Dùng API không qua shell, truyền danh sách đối số; allowlist lệnh và tham số. Kiểm tra nguồn dữ liệu trước khi xác nhận.' },
   { id: 'SRC-SQL', cwe: 89, severity: 'high', title: 'Câu SQL được ghép chuỗi cần kiểm tra', match: /\b(?:SELECT|INSERT|UPDATE|DELETE)\b[^\n]*(?:\+|\$\{|\s\.\s|\$_(?:GET|POST|REQUEST))|\b(?:execute|query)\s*\(\s*f["']/, impact: 'Nếu dữ liệu người dùng được ghép trực tiếp, có nguy cơ SQL injection.', fix: 'Dùng truy vấn tham số hóa hoặc prepared statement; không tự escape bằng thay thế chuỗi.' },
   { id: 'SRC-XSS', cwe: 79, severity: 'medium', title: 'Điểm xuất HTML có nguy cơ XSS', match: /\.\s*(?:innerHTML|outerHTML)\s*=|\bdangerouslySetInnerHTML\s*[:=]|\bdocument\.write\s*\(|\bres\.(?:send|write)\s*\([^\n]*(?:req\.|request\.)|\becho\s+\$_(?:GET|POST|REQUEST)/, impact: 'Dữ liệu không được escape hoặc sanitize có thể thực thi script trong trình duyệt.', fix: 'Dùng textContent hoặc template tự escape; nếu cần HTML, dùng bộ sanitize phù hợp và kiểm tra luồng dữ liệu.' },
   { id: 'SRC-DESERIALIZE', cwe: 502, severity: 'high', title: 'Giải tuần tự dữ liệu cần kiểm tra', match: /\b(?:pickle\.loads?|unserialize)\s*\(|\byaml\.load\s*\((?![^\n]*(?:SafeLoader|BaseLoader))/, impact: 'Giải tuần tự dữ liệu không tin cậy có thể tạo đối tượng hoặc thực thi code ngoài ý muốn.', fix: 'Dùng JSON có schema, yaml.safe_load hoặc cơ chế giải tuần tự không tạo đối tượng tùy ý.' },
   { id: 'SRC-TLS-VERIFY', cwe: 295, severity: 'medium', title: 'Tắt xác minh chứng chỉ TLS', match: /\brejectUnauthorized\s*:\s*false\b|\bverify\s*=\s*False\b|\bNODE_TLS_REJECT_UNAUTHORIZED\s*=\s*["']?0\b|CURLOPT_SSL_VERIFYPEER\s*,\s*(?:false|0)/, impact: 'Kết nối có thể chấp nhận máy chủ giả mạo khi chứng chỉ không được xác minh.', fix: 'Bật xác minh chứng chỉ và cấu hình CA tin cậy thay vì tắt xác minh.' },
+  { id: 'SRC-PY-TLS-CONTEXT', cwe: 295, severity: 'medium', title: 'Python tạo TLS context không xác minh máy chủ', exts: ['.py'], match: /\bssl\._create_unverified_context\s*\(/, impact: 'Kết nối HTTPS dùng context này có thể chấp nhận chứng chỉ không đáng tin.', fix: 'Dùng ssl.create_default_context() và cấu hình CA tin cậy khi cần.', condition: 'Xác minh context thực sự được dùng cho kết nối phía máy khách và có được đổi cấu hình trước khi kết nối hay không.', reference: 'https://peps.python.org/pep-0476/#opting-out' },
+  { id: 'SRC-PY-INSECURE-COOKIE', cwe: 614, severity: 'low', title: 'Lời gọi set_cookie() đặt secure=False', exts: ['.py'], match: /\.set_cookie\s*\(/, check: explicitlyInsecureCookie, impact: 'Nếu không có lớp triển khai bổ sung cờ Secure, trình duyệt có thể gửi cookie qua HTTP.', fix: 'Đặt secure=True cho cookie nhạy cảm khi phục vụ qua HTTPS.', condition: 'Xác minh phương thức đặt cookie HTTP, dữ liệu cookie và header Set-Cookie ở môi trường triển khai.', reference: 'https://flask.palletsprojects.com/en/stable/web-security/#set-cookie-options' },
+  { id: 'SRC-PY-WEAK-RANDOM', cwe: 338, severity: 'low', title: 'Python dùng bộ sinh giả ngẫu nhiên random', exts: ['.py'], match: /(?<![\w.])random\.(?:getrandbits|randbytes|random|randint|randrange|choice|choices|sample|shuffle|uniform|normalvariate)\s*\(/, impact: 'Kết quả từ bộ sinh mặc định có thể dự đoán được nếu dùng để tạo bí mật hoặc mã xác thực.', fix: 'Dùng secrets hoặc nguồn ngẫu nhiên mật mã tương đương cho giá trị bảo mật.', condition: 'Truy vết kết quả đến token, khóa hoặc quyết định bảo mật. Dùng random cho mô phỏng và lấy mẫu phi bảo mật có thể phù hợp.', reference: 'https://docs.python.org/3/library/secrets.html' },
   { id: 'SRC-DEBUG', cwe: 489, severity: 'low', title: 'Cấu hình debug đang bật', match: /\bdebug\s*[:=]\s*(?:true|True|1)\b|\b(?:APP_DEBUG|DEBUG)\s*=\s*(?:true|True|1)\b/, impact: 'Nếu dùng trong production, debug có thể lộ thông tin nội bộ hoặc chi tiết lỗi.', fix: 'Tắt debug trong production; kiểm tra môi trường triển khai thực tế.' },
-  { id: 'SRC-HASH', cwe: 327, severity: 'low', title: 'Thuật toán hash yếu cần kiểm tra mục đích', match: /\b(?:md5|sha1)\s*\(|\bcreateHash\s*\(\s*["'](?:md5|sha1)["']/, impact: 'MD5/SHA-1 không phù hợp để lưu mật khẩu hoặc bảo vệ dữ liệu trước va chạm.', fix: 'Dùng Argon2id/scrypt cho mật khẩu; SHA-256 trở lên cho nhu cầu hash phù hợp. Checksum phi bảo mật có thể hợp lệ.' },
+  { id: 'SRC-HASH', cwe: 327, severity: 'low', title: 'Thuật toán hash yếu cần kiểm tra mục đích', match: /\b(?:md5|sha1)\s*\(|\b(?:createHash|hashlib\.new)\s*\(\s*(["'])(?:[mM][dD]5|[sS][hH][aA]1)\1/, impact: 'MD5/SHA-1 không phù hợp để lưu mật khẩu hoặc bảo vệ dữ liệu trước va chạm.', fix: 'Dùng Argon2id/scrypt cho mật khẩu; dùng SHA-256 trở lên khi cần một hàm băm chống va chạm.', condition: 'Kiểm tra digest có tham gia xác thực hoặc bảo vệ tính toàn vẹn trước sửa đổi có chủ đích hay chỉ làm checksum phi bảo mật.' },
   { id: 'SRC-SECRET', cwe: 798, severity: 'high', title: 'Có thể chứa thông tin xác thực hardcode', secret: true, match: /(?:["']?\b(?:password|passwd|api[_-]?key|secret(?:[_-]?key)?|access[_-]?token|auth[_-]?token)["']?\s*[:=]\s*["'][^"'\r\n]{8,}["'])|(?:\b(?:AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{24,}|sk_live_[A-Za-z0-9]{16,})\b)/i, impact: 'Nếu là credential thật, người có quyền đọc mã nguồn có thể sử dụng để truy cập tài nguyên.', fix: 'Xác minh credential; nếu thật, thu hồi/rotate và chuyển vào biến môi trường hoặc secret manager. Không chỉ xóa khỏi commit mới.' },
   { id: 'SRC-PRIVATE-KEY', cwe: 321, severity: 'high', title: 'Tệp có dấu hiệu chứa private key', secret: true, match: /-----BEGIN (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----/, impact: 'Private key được đưa vào mã nguồn có thể làm lộ danh tính hoặc quyền truy cập.', fix: 'Xác minh đây có phải key thật; nếu có, thay key/certificate và loại bỏ khỏi repo cùng lịch sử khi phù hợp.' }
 ];
@@ -89,25 +99,32 @@ export async function scanSource(input, options = {}) {
   if (rootStat.isSymbolicLink() || (!rootStat.isFile() && !rootStat.isDirectory())) throw new Error('Mục tiêu phải là file/thư mục thường, không phải symlink.');
   const base = rootStat.isDirectory() ? root : path.dirname(root);
   const report = createReport('source', root);
-  const maxFiles = options.maxFiles ?? 2000;
-  const maxFileBytes = options.maxFileBytes ?? 1024 * 1024;
+  const maxFiles = options.maxFiles ?? MAX_SOURCE_FILES;
+  const maxFileBytes = options.maxFileBytes ?? MAX_SOURCE_FILE_BYTES;
   const customRules = options.customRules ?? [];
   const maxFindings = options.maxFindings ?? 5000;
   const excluded = new Set((options.excludePaths ?? []).map((p) => path.resolve(p)));
+  const useGitignore = options.gitignore !== false;
+  const onlyFiles = options.onlyFiles;
+  const linesByFile = new Map();
+  const suppressionsByFile = new Map();
+  const dependencyFiles = new Set();
+  const codeFiles = new Set();
+  const contextRemoved = {};
   const snapshot = corpusStats();
-  report.stats = { filesScanned: 0, filesSkipped: 0, maxFiles, maxFileBytes, ruleCount: SOURCE_RULES.length + customRules.length, maxFindings, formats: {}, dependencyAnalysis: { packages: 0, unresolved: 0, unsupportedManifests: 0, unassessedRanges: 0, advisorySnapshot: snapshot.builtAt, advisoryCount: snapshot.advisories, supportedEcosystems: ['npm', 'pip'] }, corpus: snapshot };
+  report.stats = { filesScanned: 0, filesSkipped: 0, maxFiles, maxFileBytes, ruleCount: SOURCE_RULES.length + customRules.length, maxFindings, formats: {}, dependencyAnalysis: { manifests: 0, findings: 0, packages: 0, unresolved: 0, unsupportedManifests: 0, unassessedRanges: 0, advisorySnapshot: snapshot.builtAt, advisoryCount: snapshot.advisories, supportedEcosystems: ['npm', 'pip', 'composer'] }, corpus: snapshot };
   const sources = [];
-  const maxDeepBytes = 20 * 1024 * 1024;
   let deepBytes = 0;
   if (deep) {
     if (customRules.length) throw new Error('Rule JSON bổ sung chỉ dùng với quét nhanh.');
-    delete report.stats.dependencyAnalysis;
     report.stats.ruleCount = SEMGREP_RULE_COUNT;
     report.limitations[1] = 'Semgrep CE theo dõi dữ liệu trong từng hàm và so khớp các mẫu mã nguồn hoặc cấu hình đã khai báo. Cần kiểm chứng ngữ cảnh của vị trí được báo.';
   }
+  if (useGitignore) report.stats.gitignore = { applied: true, ignored: 0 };
+  if (onlyFiles) report.stats.diff = { ...(options.diffInfo ?? {}), changedFiles: onlyFiles.size, unchanged: 0 };
   let limitReached = false;
 
-  async function visit(absolute) {
+  async function visit(absolute, ignoreStack = []) {
     if (excluded.has(absolute) || limitReached) return;
     const relative = path.relative(base, absolute).split(path.sep).join('/');
     let stat;
@@ -115,18 +132,33 @@ export async function scanSource(input, options = {}) {
     catch { report.errors.push(`Không đọc được metadata: ${relative}`); return; }
     if (stat.isSymbolicLink()) { report.stats.filesSkipped++; return; }
     if (stat.isDirectory()) {
+      if (!options.includeTests && relative && isTestPath(relative + '/')) { report.stats.filesSkipped++; return; }
       if (absolute !== root && SKIP.has(path.basename(absolute))) { report.stats.filesSkipped++; return; }
+      if (absolute !== root && useGitignore && isIgnored(ignoreStack, relative, true)) { report.stats.gitignore.ignored++; return; }
       let children;
       try { children = await readdir(absolute); }
       catch { report.errors.push(`Không đọc được thư mục: ${relative}`); return; }
-      for (const child of children.sort()) await visit(path.join(absolute, child));
+      let stack = ignoreStack;
+      if (useGitignore && children.includes('.gitignore')) {
+        try {
+          const ignoreFile = path.join(absolute, '.gitignore');
+          const ignoreStat = await lstat(ignoreFile);
+          if (ignoreStat.isFile() && ignoreStat.size <= maxFileBytes) stack = [...ignoreStack, parseGitignore(await readFile(ignoreFile, 'utf8'), absolute === base ? '' : relative)];
+        } catch { report.errors.push(`Không đọc được .gitignore: ${relative || '.'}`); }
+      }
+      for (const child of children.sort()) await visit(path.join(absolute, child), stack);
       return;
     }
     if (!stat.isFile()) return;
+    const testPath = rootStat.isFile() ? `${path.basename(base)}/${relative}` : relative;
+    if (!options.includeTests && isTestPath(testPath)) { report.stats.filesSkipped++; return; }
+    if (useGitignore && isIgnored(ignoreStack, relative, false)) { report.stats.gitignore.ignored++; return; }
+    if (onlyFiles && !onlyFiles.has(pathKey(absolute))) { report.stats.diff.unchanged++; return; }
     const ext = path.extname(absolute).toLowerCase();
     const name = path.basename(absolute);
     const language = deep ? semgrepLanguage(absolute.split(path.sep).join('/')) : undefined;
-    const supported = deep ? language : isSupportedSourceFile(absolute);
+    const manifest = isDependencyManifest(name);
+    const supported = deep ? language || manifest : isSupportedSourceFile(absolute);
     if (!supported) { report.stats.filesSkipped++; return; }
     if (report.stats.filesScanned >= maxFiles) { limitReached = true; report.errors.push(`Đã chạm giới hạn ${maxFiles} file; còn dữ liệu chưa kiểm tra.`); return; }
     if (stat.size > maxFileBytes) { report.stats.filesSkipped++; report.errors.push(`File vượt giới hạn ${maxFileBytes} byte: ${relative}`); return; }
@@ -134,35 +166,51 @@ export async function scanSource(input, options = {}) {
     try { buffer = await readFile(absolute); }
     catch { report.errors.push(`Không đọc được file: ${relative}`); return; }
     if (buffer.includes(0)) { report.stats.filesSkipped++; return; }
-    if (deep && buffer.length > maxFileBytes) {
+    if (buffer.length > maxFileBytes) {
       report.stats.filesSkipped++;
       report.errors.push(`File vượt giới hạn ${maxFileBytes} byte: ${relative}`);
       return;
     }
-    if (deep && deepBytes + buffer.length > maxDeepBytes) {
-      report.errors.push('Đã chạm giới hạn 20 MiB mã nguồn cho Semgrep; còn file chưa phân tích.');
+    if (language && deepBytes + buffer.length > MAX_SOURCE_TOTAL_BYTES) {
+      report.errors.push(`Đã chạm giới hạn ${MAX_SOURCE_TOTAL_BYTES / MIB} MiB mã nguồn cho Semgrep; còn file chưa phân tích.`);
       limitReached = true;
       return;
     }
     report.stats.filesScanned++;
     report.stats.formats[ext || name] = (report.stats.formats[ext || name] || 0) + 1;
     const text = buffer.toString('utf8');
+    const lines = text.split(/\r?\n/);
+    linesByFile.set(relative, lines);
+    report.stats.linesScanned = (report.stats.linesScanned ?? 0) + lines.length;
+    if (text.includes('srcaudit-ignore')) suppressionsByFile.set(relative, collectSuppressions(lines));
+    if (manifest) {
+      const stats = report.stats.dependencyAnalysis;
+      stats.manifests++;
+      try {
+        const inventory = extractDependencies(name, text);
+        stats.packages += inventory.packages.length;
+        stats.unresolved += inventory.unresolved;
+        stats.unsupportedManifests += inventory.unsupported;
+        const dependencies = dependencyFindings(inventory.packages, relative);
+        stats.unassessedRanges += dependencies.unassessedRanges;
+        report.findings.push(...dependencies.findings);
+        if (!inventory.unresolved && !inventory.unsupported && !dependencies.unassessedRanges) dependencyFiles.add(relative);
+      } catch { report.errors.push('Không đọc được dependency manifest hoặc cấu trúc không hợp lệ: ' + relative); }
+    }
     if (deep) {
-      deepBytes += buffer.length;
-      sources.push({ file: relative, text, language });
+      if (language) {
+        deepBytes += buffer.length;
+        sources.push({ file: relative, text, language });
+      }
       return;
     }
-    const lines = text.split(/\r?\n/);
-    try {
-      const inventory = extractDependencies(name, text);
-      report.stats.dependencyAnalysis.packages += inventory.packages.length;
-      report.stats.dependencyAnalysis.unresolved += inventory.unresolved;
-      report.stats.dependencyAnalysis.unsupportedManifests += inventory.unsupported;
-      const dependencies = dependencyFindings(inventory.packages, relative);
-      report.stats.dependencyAnalysis.unassessedRanges += dependencies.unassessedRanges;
-      report.findings.push(...dependencies.findings);
-    } catch { report.errors.push(`Không đọc được dependency manifest hoặc cấu trúc JSON không hợp lệ: ${relative}`); }
+    codeFiles.add(relative);
     let inBlock = false;
+    // Python docstrings / standalone triple-quoted strings are documentation, not code.
+    // Only blocks whose first line *starts* with the quotes count, so SQL kept in
+    // `query = """...` assignments is still scanned.
+    let docQuote = '';
+    const python = ext === '.py';
     for (let index = 0; index < lines.length; index++) {
       const raw = lines[index];
       if (raw.length > 8192) {
@@ -171,7 +219,26 @@ export async function scanSource(input, options = {}) {
       }
       const line = raw.trim();
       // Line-based comment handling is deliberately conservative; no language parser.
-      const comment = inBlock || /^(?:\/\/|#|<!--|\/\*|\*)/.test(line);
+      let docstring = false;
+      if (python) {
+        if (docQuote) {
+          docstring = true;
+          if (line.includes(docQuote)) {
+            // Closing line counts as documentation only when nothing follows the quotes.
+            docstring = line.endsWith(docQuote) && line.indexOf(docQuote) === line.length - 3;
+            docQuote = '';
+          }
+        } else {
+          const open = line.match(/^[rRuUbBfF]{0,2}("""|''')/);
+          if (open) {
+            docstring = true;
+            const rest = line.slice(open[0].length);
+            if (!rest.includes(open[1])) docQuote = open[1];
+            else if (!rest.trimEnd().endsWith(open[1])) docstring = false;
+          }
+        }
+      }
+      const comment = inBlock || docstring || /^(?:\/\/|#|<!--|\/\*|\*)/.test(line);
       if (line.startsWith('/*') || line.startsWith('<!--')) inBlock = !line.includes('*/') && !line.includes('-->');
       if (line.includes('*/') || line.includes('-->')) inBlock = false;
       for (const custom of customRules) {
@@ -188,11 +255,20 @@ export async function scanSource(input, options = {}) {
           envSecret = Boolean(assignment && /PASSWORD|PASSWD|API_KEY|SECRET|ACCESS_TOKEN|AUTH_TOKEN/i.test(assignment[1]) && assignment[2].length >= 8);
         }
         if ((comment && !rule.secret) || (rule.exts && !rule.exts.includes(ext)) || (!envSecret && !rule.match.test(raw))) continue;
+        if (rule.check && !rule.check(lines, index)) continue;
+        let placeholder = false;
+        if (rule.id === 'SRC-SECRET') {
+          const kind = classifySecret(raw);
+          if (kind === 'reference') { contextRemoved[rule.id] = (contextRemoved[rule.id] ?? 0) + 1; continue; }
+          placeholder = kind === 'placeholder';
+        }
+        if (rule.id === 'SRC-HASH' && ext === '.py' && /\busedforsecurity\s*=\s*False\b/.test(raw)) { contextRemoved[rule.id] = (contextRemoved[rule.id] ?? 0) + 1; continue; }
         report.findings.push({
-          ruleId: rule.id, title: rule.title, severity: rule.severity,
-          confidence: rule.id === 'SRC-PRIVATE-KEY' ? 'high' : 'medium', status: 'needs-review', cwe: `CWE-${rule.cwe}`,
+          ruleId: rule.id, title: rule.title, severity: placeholder ? 'info' : rule.severity,
+          confidence: placeholder ? 'low' : rule.id === 'SRC-PRIVATE-KEY' ? 'high' : 'medium', status: 'needs-review', cwe: `CWE-${rule.cwe}`,
+          ...(placeholder ? { context: 'placeholder' } : {}),
           location: { file: relative, line: index + 1 }, evidence: evidence(raw, rule.secret),
-          impact: rule.impact, remediation: rule.fix, reference: ref(rule.cwe), detection: { method: 'signature', condition: rule.condition || 'Cần xác minh đầu vào, biện pháp bảo vệ và môi trường trước khi kết luận.', asvs: rule.asvs || [] }
+          impact: rule.impact, remediation: rule.fix, reference: rule.reference || ref(rule.cwe), detection: { method: 'signature', condition: rule.condition || 'Cần xác minh đầu vào, biện pháp bảo vệ và môi trường trước khi kết luận.', asvs: rule.asvs || [] }
         });
       }
       if (report.findings.length >= maxFindings) {
@@ -212,17 +288,39 @@ export async function scanSource(input, options = {}) {
   if (deep) {
     const result = sources.length
       ? await (options.semgrepRunner ?? runSemgrep)(sources)
-      : { status: 'skipped', scanned: 0, findings: [], message: 'Không có file thuộc ngôn ngữ được hỗ trợ để phân tích sâu.' };
-    report.findings = result.findings.slice(0, maxFindings);
+      : { status: 'skipped', scanned: 0, findings: [] };
+    if (result.status === 'complete' && result.scanned === sources.length) {
+      for (const { file } of sources) codeFiles.add(file);
+    }
+    const total = report.findings.length + result.findings.length;
+    report.findings = report.findings.concat(result.findings).slice(0, maxFindings);
     report.stats.sourceAnalysis = {
       mode: 'deep', engine: 'Semgrep', status: result.status, scanned: result.scanned,
-      selected: sources.length, findings: report.findings.length, languages: result.languages ?? {},
+      selected: sources.length, findings: result.findings.length, languages: result.languages ?? {},
+      ...(result.pythonPrecision ? { pythonPrecision: result.pythonPrecision } : {}),
     };
     if (result.message) report.errors.push(result.message);
-    if (result.findings.length > maxFindings) report.errors.push(`Đã chạm giới hạn ${maxFindings} phát hiện; còn kết quả chưa hiển thị.`);
+    if (!sources.length && !onlyFiles && !report.stats.dependencyAnalysis.manifests) report.errors.push('Không có file thuộc ngôn ngữ được hỗ trợ để phân tích sâu.');
+    if (total > maxFindings) report.errors.push('Đã chạm giới hạn ' + maxFindings + ' phát hiện; còn kết quả chưa hiển thị.');
   } else {
     report.findings = groupFlowFindings(report.findings);
-    if (!report.stats.filesScanned) report.errors.push('Không có file văn bản thuộc định dạng được hỗ trợ để phân tích.');
+    if (options.astFilter !== false) {
+      const sourceByFile = { get: (file) => linesByFile.get(file)?.join('\n') };
+      const filtered = filterWithAst(report.findings, sourceByFile);
+      report.findings = filtered.findings;
+      report.filtered = filtered.removed;
+      report.stats.astFilter = filtered.stats;
+    }
+    if (!report.stats.filesScanned && !onlyFiles) report.errors.push('Không có file văn bản thuộc định dạng được hỗ trợ để phân tích.');
   }
+  if (options.contextFilter !== false) {
+    const downgraded = applyFileContext(report.findings);
+    for (const finding of report.findings) if (finding.context === 'placeholder') downgraded[finding.ruleId] = (downgraded[finding.ruleId] ?? 0) + 1;
+    report.stats.contextFilter = { removed: contextRemoved, downgraded };
+  }
+  assignFingerprints(report.findings, linesByFile);
+  applySuppressions(report, suppressionsByFile);
+  report.stats.dependencyAnalysis.findings = report.findings.filter(({ advisory }) => advisory).length;
+  Object.defineProperty(report, 'scanScope', { value: { codeFiles, dependencyFiles } });
   return finishReport(report);
 }

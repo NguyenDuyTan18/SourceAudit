@@ -10,6 +10,18 @@ const prTitle = '${{ github.event.pull_request.title }}';
 
 export const frameworkConfigCases = [
   {
+    name: 'actions-workflow-token-write-all', ext: 'yml', language: 'GitHub Actions',
+    target: '.github/workflows/build.yml', cwe: 'CWE-250', ruleId: 'srcaudit-github-actions-token-write-all',
+    vulnerable: 'permissions: write-all\n' + workflow(['- run: echo Ready']),
+    fixed: 'permissions: { contents: read }\n' + workflow(['- env:', '    permissions: write-all', '  run: echo Ready']),
+  },
+  {
+    name: 'actions-job-token-write-all', ext: 'yaml', language: 'GitHub Actions',
+    target: '.github/workflows/build.yaml', cwe: 'CWE-250', ruleId: 'srcaudit-github-actions-token-write-all',
+    vulnerable: workflow(['- run: echo Ready']).replace('    steps:', '    permissions: "write-all"\n    steps:'),
+    fixed: workflow(['- run: echo Ready']).replace('    steps:', '    permissions: read-all\n    steps:'),
+  },
+  {
     name: 'actions-pr-title-multiline', ext: 'yml', language: 'GitHub Actions',
     target: '.github/workflows/check.yml', cwe: 'CWE-78', ruleId: 'srcaudit-github-actions-script-injection',
     vulnerable: workflow(['- run: |', '    echo "Checking PR"', '    echo "' + prTitle + '"']),
@@ -24,7 +36,7 @@ export const frameworkConfigCases = [
   },
   {
     name: 'docker-final-stage-root', language: 'Dockerfile',
-    target: 'Dockerfile', cwe: 'CWE-250', ruleId: 'srcaudit-dockerfile-root-user',
+    target: 'Dockerfile.prod', cwe: 'CWE-250', ruleId: 'srcaudit-dockerfile-root-user',
     vulnerable: 'FROM node:22 AS build\nUSER root\nFROM node:22\nUSER 0:0\nCMD ["node", "server.js"]\n',
     fixed: 'FROM node:22 AS build\nUSER root\nFROM node:22\nUSER 0:0\nUSER node\nCMD ["node", "server.js"]\n',
     sink: 'USER 0:0',

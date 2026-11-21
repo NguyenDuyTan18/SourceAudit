@@ -39,7 +39,7 @@ export function resolveRetentionMs(value = process.env.SRCAUDIT_REPORT_RETENTION
  * Symlinks, files and directories with names SrcAudit did not create are left untouched.
  * Returns the names of removed directories.
  */
-export async function pruneReports(reportsDir, { maxAgeMs, now = Date.now() } = {}) {
+export async function pruneReports(reportsDir, { maxAgeMs, now = Date.now(), excluded = new Set() } = {}) {
   if (!maxAgeMs || maxAgeMs <= 0) return [];
   let entries;
   try { entries = await readdir(reportsDir, { withFileTypes: true }); }
@@ -50,12 +50,13 @@ export async function pruneReports(reportsDir, { maxAgeMs, now = Date.now() } = 
   const removed = [];
   for (const entry of entries) {
     if (entry.isDirectory() && isUserReportFolder(entry.name)) {
-      const nested = await pruneReports(path.join(reportsDir, entry.name), { maxAgeMs, now });
+      const nested = await pruneReports(path.join(reportsDir, entry.name), { maxAgeMs, now, excluded });
       removed.push(...nested.map((name) => `${entry.name}/${name}`));
       continue;
     }
     if (!entry.isDirectory() || !isManagedReportName(entry.name)) continue;
     const target = path.join(reportsDir, entry.name);
+    if (excluded.has(target)) continue;
     try {
       const info = await lstat(target);
       if (!info.isDirectory() || now - info.mtimeMs <= maxAgeMs) continue;

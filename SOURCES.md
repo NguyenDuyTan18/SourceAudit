@@ -1,6 +1,6 @@
 # Nguồn tham khảo cho thư viện nhận dạng
 
-Đối chiếu ngày 2026-11-05. Tóm tắt và rule trong tool được viết mới, không sao chép nguyên bài hay bộ rule có sẵn. Những mẫu source là heuristic riêng dựa trên nhóm nguyên nhân và API liên quan; chưa có kiểm định precision/recall trên benchmark thực tế.
+Cập nhật ngày 21/11/2026. Tóm tắt và quy tắc SrcAudit ghi nguồn để người đọc đối chiếu. [Tài liệu benchmark](docs/testing/accuracy.md) công bố precision và recall theo bộ dữ liệu, chế độ và phạm vi đã đo.
 
 | Nguồn | Phần dùng trong tool |
 |---|---|
@@ -14,6 +14,9 @@
 | [PortSwigger XXE](https://portswigger.net/web-security/xxe) | Rà soát XML parser và external entity |
 | [PortSwigger JWT](https://portswigger.net/web-security/jwt) | Rà soát verify chữ ký và sử dụng claim |
 | [Semgrep taint analysis](https://semgrep.dev/docs/writing-rules/data-flow/taint-mode/overview) | Phân tích luồng trong chế độ sâu và khai báo source, sink, sanitizer trong YAML |
+| [Flask Request](https://flask.palletsprojects.com/en/stable/api/#flask.Request), [Jakarta Servlet Request](https://jakarta.ee/specifications/servlet/6.1/apidocs/jakarta.servlet/jakarta/servlet/http/HttpServletRequest.html) và [Java Files](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Files.html) | Nhận diện nguồn request và các API đọc file hoặc ghi phản hồi cần kiểm tra |
+| [Flask Security Considerations](https://flask.palletsprojects.com/en/stable/web-security/) và [Python SAX](https://docs.python.org/3.12/library/xml.sax.html) | Đối chiếu quy tắc xuất HTML, cờ Secure của cookie và cấu hình thực thể ngoài |
+| [Composer versions and constraints](https://getcomposer.org/doc/articles/versions.md) | Đối chiếu phiên bản ổn định từ composer.lock với các khoảng advisory đã hỗ trợ |
 | [Định tuyến Express](https://expressjs.com/en/guide/routing.html) và [truy vấn node-postgres](https://node-postgres.com/features/queries) | Nhận diện tham số request trong callback và phân biệt câu SQL với các giá trị truyền riêng |
 | [GitHub Actions script injection](https://docs.github.com/en/actions/concepts/security/script-injections) và [Dockerfile USER](https://docs.docker.com/reference/dockerfile/#user) | So khớp dữ liệu sự kiện trong lệnh của workflow và kiểm tra user của stage cuối |
 | [Spring JDBC](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/jdbc/core/JdbcTemplate.html) và [Laravel Database](https://laravel.com/docs/12.x/database#running-a-select-query) | Xác định đối số SQL và cách truyền giá trị qua binding |
@@ -22,7 +25,12 @@
 
 Mỗi phát hiện có CWE reference. Thư viện kiến thức kèm thêm các trang OWASP/PortSwigger theo chủ đề để người dùng kiểm chứng; đây không phải chứng nhận phát hiện hay cơ sở dữ liệu CVE.
 
-UI/upload revision: ZIP streaming API được đối chiếu với [fflate README](https://github.com/101arrowz/fflate#readme) qua Context7; thư viện được cài từ npm với install scripts tắt. Mã thư viện và giấy phép đi kèm trong bản bàn giao.
+API giải nén theo luồng được đối chiếu với [tài liệu fflate](https://github.com/101arrowz/fflate#readme). `npm ci --ignore-scripts` cài dependency theo lockfile, cùng các tệp giấy phép trong từng gói khi có.
+
+## Tài liệu kỹ thuật và nghiên cứu
+
+- [Tài liệu kỹ thuật](data/references.json) lưu nguồn gốc và hướng áp dụng cho NIST SSDF, OpenSSF OSPS Baseline và Scorecard, OWASP SAMM và Benchmark, OSV Schema và GitHub SARIF.
+- [Nghiên cứu](data/research.json) lưu tóm tắt, giới hạn và liên kết bài gốc để hỗ trợ đánh giá báo nhầm và bỏ sót.
 
 ## Kho ngữ cảnh thu thập ngày 2026-11-05
 

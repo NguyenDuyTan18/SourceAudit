@@ -1,25 +1,47 @@
 import http from 'node:http';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { readFile, readdir, writeFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { readFile, readdir, writeFile, mkdir, mkdtemp, rm, rename, lstat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { scanSource, SOURCE_RULES, SUPPORTED_SOURCE_EXTENSIONS } from './source.mjs';
-import { prepareZipUpload, ZipInputError } from './uploads.mjs';
-import { writeReports, renderHtml, renderText, finishReport } from './report.mjs';
-import { KNOWLEDGE, importWriteup, loadWriteups, enrichReport } from './knowledge.mjs';
+import { SOURCE_RULES, SUPPORTED_SOURCE_EXTENSIONS } from './source.mjs';
+import { scanUpload, runScanWorker } from './scan-job.mjs';
+import { renderHtml, renderText } from './report.mjs';
+import { renderSarif } from './sarif.mjs';
+import { KNOWLEDGE, importWriteup, WriteupLimitError } from './knowledge.mjs';
 import { corpusStats, searchCorpus } from './corpus.mjs';
 import { createAccountStore, normalizeOwnerUsername, OWNER_ID, validOwnerPassword, validOwnerUsername } from './owner-account.mjs';
 import { isUserReportFolder, pruneReports, resolveRetentionMs } from './report-retention.mjs';
+import { MAX_ZIP_BYTES, MIB } from './scan-scope.mjs';
 
 const RETENTION_SWEEP_MS = 60 * 60 * 1000;
 const MAX_JOBS_PER_USER = 20;
 const MAX_QUEUE = 10;
+const MAX_ARCHIVE_BASE64 = Math.ceil(MAX_ZIP_BYTES / 3) * 4;
+const UPLOAD_BODY_BYTES = MAX_ARCHIVE_BASE64 + 16 * 1024;
+const META_RESERVE = 8192;
 const JOB_ID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 
 const WEB = fileURLToPath(new URL('../web/', import.meta.url));
 const ZIP_MODULE = fileURLToPath(import.meta.resolve('fflate/browser'));
 class InputError extends Error { constructor(status, message) { super(message); this.status = status; } }
+const storageFull = 'Đã hết hạn mức lưu trữ của tài khoản. Xóa báo cáo cũ rồi thử lại.';
+
+async function directories(directory) {
+  try { return await readdir(directory, { withFileTypes: true }); }
+  catch (error) { if (error.code === 'ENOENT') return []; throw error; }
+}
+
+async function atomicJobFile(directory, name, body) {
+  const target = path.join(directory, name);
+  const temporary = target + '.tmp';
+  try {
+    await writeFile(temporary, body, { mode: 0o600, flush: true });
+    await rename(temporary, target);
+  } finally {
+    await rm(temporary, { force: true }).catch(() => {});
+  }
+}
 
 function readJson(request, limit) {
   if (!/^application\/json(?:;|$)/i.test(request.headers['content-type'] ?? '')) throw new InputError(415, 'Cần gửi dữ liệu JSON.');
@@ -31,6 +53,7 @@ function readJson(request, limit) {
       else if (!rejected) chunks.push(chunk);
     });
     request.on('error', () => reject(new InputError(400, 'Không nhận được dữ liệu.')));
+    request.on('aborted', () => reject(new InputError(400, 'Yêu cầu đã bị ngắt.')));
     request.on('end', () => {
       if (rejected) return;
       try {
@@ -56,8 +79,12 @@ function readLoginForm(request) {
   });
 }
 
-export function createUiServer({ rootDir, semgrepRunner, publicAccess, accountFile, reportRetentionMs } = {}) {
+export function createUiServer({
+  rootDir, semgrepRunner, publicAccess, accountFile, localOwnerWorkspace = false, reportRetentionMs,
+  accountStorageBytes = Number(process.env.SRCAUDIT_ACCOUNT_STORAGE_MIB ?? 128) * 1024 * 1024,
+} = {}) {
   const retentionMs = reportRetentionMs ?? resolveRetentionMs();
+  if (!Number.isSafeInteger(accountStorageBytes) || accountStorageBytes <= META_RESERVE) throw new Error('Hạn mức lưu trữ tài khoản không hợp lệ.');
   const accounts = accountFile ? createAccountStore(path.resolve(accountFile)) : undefined;
   let publicEndpoint;
   let authenticationHash;
@@ -85,7 +112,7 @@ export function createUiServer({ rootDir, semgrepRunner, publicAccess, accountFi
   const loginAttempts = new Map();
   let passwordWork = 0;
   const legacyIdentity = { userId: 'legacy', username: publicAccess?.username ?? 'legacy', role: 'user' };
-  const localIdentity = { userId: 'local', username: 'local', role: 'user' };
+  const localIdentity = { userId: localOwnerWorkspace ? OWNER_ID : 'local', username: 'local', role: 'user' };
   const matchesLegacy = (value) => Boolean(authenticationHash &&
     timingSafeEqual(authenticationHash, createHash('sha256').update(value).digest()));
   async function runPasswordWork(work) {
@@ -97,8 +124,14 @@ export function createUiServer({ rootDir, semgrepRunner, publicAccess, accountFi
   // Every scan belongs to exactly one account (ownerId). Ids come from the server-side session only.
   const jobs = new Map();
   const queue = [];
-  let running = false;
-  const knowledgeDir = path.join(root, 'knowledge-local');
+  const uploads = new Map();
+  const uploadRequests = new Set();
+  const writeupImports = new Map();
+  let activeJob;
+  let activeWork;
+  let closing = false;
+  const knowledgeRoot = path.join(root, 'knowledge-local');
+  const knowledgeDir = (ownerId) => ownerId === 'local' ? knowledgeRoot : path.join(knowledgeRoot, 'user-' + ownerId);
   const reportsDir = path.join(root, '.scanner-reports');
   const userDir = (ownerId) => path.join(reportsDir, `user-${ownerId}`);
   const jobDir = (job) => path.join(userDir(job.ownerId), job.id);
@@ -108,7 +141,7 @@ export function createUiServer({ rootDir, semgrepRunner, publicAccess, accountFi
     return job && job.ownerId === identity.userId ? job : undefined;
   };
   function publicJob(job) {
-    const { ownerId, ...view } = job;
+    const { ownerId, label, ...view } = job;
     if (job.status === 'queued') {
       const ahead = queue.findIndex((entry) => entry.job === job);
       view.stage = ahead > 0 ? `Đang chờ ${ahead} lượt kiểm tra phía trước…` : 'Đang chờ đến lượt…';
@@ -120,42 +153,72 @@ export function createUiServer({ rootDir, semgrepRunner, publicAccess, accountFi
     catch { return undefined; }
   }
   async function persistMeta(job) {
-    await mkdir(jobDir(job), { recursive: true });
-    const { stage, ...meta } = job;
-    await writeFile(path.join(jobDir(job), 'meta.json'), JSON.stringify(meta), { mode: 0o600 });
+    const { stage, label, ...meta } = job;
+    await atomicJobFile(jobDir(job), 'meta.json', JSON.stringify(meta));
   }
   async function forgetJob(job) {
+    await rm(jobDir(job), { recursive: true, force: true });
     jobs.delete(job.id);
-    await rm(jobDir(job), { recursive: true, force: true }).catch(() => {});
   }
   async function trimHistory(ownerId) {
     const finished = [...jobs.values()].filter((job) => job.ownerId === ownerId && job.finishedAt)
       .sort((a, b) => a.startedAt.localeCompare(b.startedAt));
-    for (const job of finished.slice(0, Math.max(0, finished.length - MAX_JOBS_PER_USER))) await forgetJob(job);
+    for (const job of finished.slice(0, Math.max(0, finished.length - MAX_JOBS_PER_USER))) await forgetJob(job).catch(() => {});
   }
-  // Restore each account's finished scans from disk so history survives restarts.
+  const validStoredJob = (job, id, ownerId) => job?.id === id && job.ownerId === ownerId && Number.isFinite(Date.parse(job.startedAt));
+  async function readPending(directory, id, ownerId) {
+    const file = path.join(directory, 'input.json');
+    const stat = await lstat(file);
+    if (!stat.isFile() || stat.size > UPLOAD_BODY_BYTES) return undefined;
+    const { job, content } = JSON.parse(await readFile(file, 'utf8'));
+    if (validStoredJob(job, id, ownerId) && job.status === 'queued' && ['quick', 'deep'].includes(job.sourceAnalysis) &&
+        typeof job.label === 'string' && job.label.length <= 160 && typeof content === 'string' && content.length <= MAX_ARCHIVE_BASE64) return job;
+  }
   async function loadPersisted() {
-    let folders;
-    try { folders = await readdir(reportsDir, { withFileTypes: true }); } catch { return; }
     const restored = [];
-    for (const folder of folders) {
+    for (const folder of await directories(reportsDir)) {
       if (!folder.isDirectory() || !isUserReportFolder(folder.name)) continue;
-      let entries;
-      try { entries = await readdir(path.join(reportsDir, folder.name), { withFileTypes: true }); } catch { continue; }
-      for (const entry of entries) {
+      const ownerId = folder.name.slice(5);
+      if (accounts && !(await isLiveAccount(ownerId))) continue;
+      if (!accounts && ownerId !== (authenticationHash ? legacyIdentity.userId : localIdentity.userId)) continue;
+      for (const entry of await directories(userDir(ownerId))) {
         if (!entry.isDirectory() || !JOB_ID.test(entry.name)) continue;
+        const directory = path.join(userDir(ownerId), entry.name);
         try {
-          const meta = JSON.parse(await readFile(path.join(reportsDir, folder.name, entry.name, 'meta.json'), 'utf8'));
-          if (meta?.id !== entry.name || `user-${meta.ownerId}` !== folder.name ||
-              !['done', 'failed'].includes(meta.status) || typeof meta.startedAt !== 'string') continue;
-          restored.push(meta);
-        } catch { /* folders without valid metadata are left to retention */ }
+          const meta = JSON.parse(await readFile(path.join(directory, 'meta.json'), 'utf8'));
+          if (validStoredJob(meta, entry.name, ownerId) && ['done', 'failed'].includes(meta.status)) {
+            restored.push(meta);
+            await rm(path.join(directory, 'input.json'), { force: true }).catch(() => {});
+            continue;
+          }
+        } catch { /* A pending record may exist before the report metadata. */ }
+        const pending = await readPending(directory, entry.name, ownerId).catch(() => undefined);
+        if (pending) restored.push(pending);
       }
     }
     restored.sort((a, b) => a.startedAt.localeCompare(b.startedAt));
-    for (const job of restored) if (!jobs.has(job.id)) jobs.set(job.id, job);
+    for (const job of restored) {
+      jobs.set(job.id, job);
+      if (job.status === 'queued') queue.push(job);
+    }
+  }
+  async function usedStorage(ownerId, exclude) {
+    let bytes = 0;
+    for (const entry of await directories(userDir(ownerId))) {
+      if (!entry.isDirectory() || !JOB_ID.test(entry.name) || entry.name === exclude) continue;
+      const directory = path.join(userDir(ownerId), entry.name);
+      for (const file of await directories(directory)) {
+        if (!file.isFile()) continue;
+        const stat = await lstat(path.join(directory, file.name)).catch((error) => {
+          if (error.code !== 'ENOENT') throw error;
+        });
+        if (stat?.isFile()) bytes += stat.size;
+      }
+    }
+    return bytes;
   }
   const loaded = loadPersisted();
+  void loaded.then(pump, () => {});
   // Drop finished jobs (in memory) and report folders (on disk) older than the retention period.
   async function sweepReports(now = Date.now()) {
     if (!retentionMs) return;
@@ -163,13 +226,19 @@ export function createUiServer({ rootDir, semgrepRunner, publicAccess, accountFi
     for (const [id, job] of jobs) {
       if (job.finishedAt && now - Date.parse(job.finishedAt) > retentionMs) jobs.delete(id);
     }
-    try { await pruneReports(reportsDir, { maxAgeMs: retentionMs, now }); } catch { /* retried on next sweep */ }
+    const excluded = new Set([...jobs.values()].filter(({ status }) => status === 'queued' || status === 'running').map(jobDir));
+    try { await pruneReports(reportsDir, { maxAgeMs: retentionMs, now, excluded }); } catch { /* retried on next sweep */ }
   }
   function pump() {
-    if (running || !queue.length) return;
-    const entry = queue.shift();
-    running = true;
-    void runJob(entry).catch(() => {});
+    if (closing || activeWork || !queue.length) return;
+    const job = queue.shift();
+    activeJob = job;
+    activeWork = runJob(job).catch(() => {
+      job.status = 'failed';
+      job.error = 'Không thể lưu trạng thái lượt quét. Kiểm tra dung lượng và quyền ghi.';
+      job.finishedAt = new Date().toISOString();
+      delete job.stage;
+    }).finally(() => { activeJob = undefined; activeWork = undefined; pump(); });
   }
   function startJob(data, identity) {
     const { upload, label } = data;
@@ -181,67 +250,70 @@ export function createUiServer({ rootDir, semgrepRunner, publicAccess, accountFi
     }
     const sourceAnalysis = data.sourceAnalysis ?? 'quick';
     if (!['quick', 'deep'].includes(sourceAnalysis)) throw new InputError(400, 'Chọn quét nhanh hoặc phân tích sâu.');
+    if (content.length > MAX_ARCHIVE_BASE64) throw new InputError(413, `Tệp ZIP vượt giới hạn ${MAX_ZIP_BYTES / MIB} MiB.`);
     if ([...jobs.values()].some((job) => job.ownerId === identity.userId && ['queued', 'running'].includes(job.status))) {
       throw new InputError(409, 'Một lần kiểm tra đang chạy. Hãy chờ kết quả trước khi bắt đầu lần khác.');
     }
-    if (queue.length >= MAX_QUEUE) throw new InputError(503, 'Hàng đợi kiểm tra đang đầy. Hãy thử lại sau ít phút.');
-    const job = { id: randomUUID(), ownerId: identity.userId, mode: 'upload', sourceAnalysis, status: 'queued', startedAt: new Date().toISOString() };
+    if (queue.length + uploads.size >= MAX_QUEUE) throw new InputError(503, 'Hàng đợi kiểm tra đang đầy. Hãy thử lại sau ít phút.');
+    const cleanLabel = typeof label === 'string' ? label.split(/[/\\]/).at(-1).replace(/[\x00-\x1f]/g, '').slice(0, 160) : '';
+    const job = { id: randomUUID(), ownerId: identity.userId, mode: 'upload', sourceAnalysis, status: 'queued', startedAt: new Date().toISOString(), label: cleanLabel || 'source.zip' };
     jobs.set(job.id, job);
-    queue.push({ job, content, label, sourceAnalysis });
-    pump();
-    return job.id;
+    const work = enqueue(job, content).finally(() => uploads.delete(job.ownerId));
+    uploads.set(job.ownerId, work);
+    return work;
   }
-  async function runJob({ job, content, label, sourceAnalysis }) {
-    job.status = 'running'; job.stage = 'Đang kiểm tra tệp ZIP…';
-    {
-      let uploaded;
-      try {
-        await mkdir(knowledgeDir, { recursive: true });
-        const outputDir = jobDir(job);
-        const writeups = await loadWriteups(knowledgeDir);
-        uploaded = await prepareZipUpload(content);
-        job.stage = sourceAnalysis === 'deep' ? 'Semgrep đang phân tích mã nguồn…' : 'Đang quét mã nguồn…';
-        const report = await scanSource(uploaded.rootDir, {
-          analysis: sourceAnalysis, semgrepRunner,
-        });
-        const archiveName = typeof label === 'string' ? label.split(/[/\\]/).at(-1).replace(/[\x00-\x1f]/g, '').slice(0, 160) : '';
-        report.target = 'Upload: ' + (archiveName || 'source.zip');
-        report.stats.uploadedFiles = uploaded.files;
-        report.errors.push(...uploaded.warnings);
-        finishReport(report);
-        enrichReport(report, writeups);
-        await writeReports(report, outputDir);
-        job.target = report.target;
-        job.count = report.findings.length;
-        job.scanStatus = report.status;
-      } catch (error) {
-        job.status = 'failed';
-        job.error = error instanceof ZipInputError ? error.message
-          : uploaded ? 'Lượt quét bị gián đoạn. Kiểm tra quyền ghi báo cáo hoặc thử lại với một mẫu nhỏ.'
-            : 'Không đọc được nội dung ZIP. Hãy nén lại thư mục hoặc dùng chế độ Tải thư mục.';
-      } finally {
-        if (uploaded) {
-          try { await rm(uploaded.rootDir, { recursive: true, force: true }); }
-          catch { job.status = 'failed'; job.error = 'Không xóa được source upload tạm. Kiểm tra quyền thư mục tạm của Windows.'; }
-        }
-        delete job.stage;
-        if (job.status === 'running') job.status = 'done';
-        job.finishedAt = new Date().toISOString();
-        // Let the next queued scan start while this one's metadata is written.
-        running = false; pump();
-      }
-      if (!jobs.has(job.id) || (accounts && !(await isLiveAccount(job.ownerId)))) {
-        // The account was removed while this scan ran: discard its output.
-        await forgetJob(job);
-        return;
-      }
-      try { await persistMeta(job); } catch { /* history for this scan lasts until restart */ }
-      await trimHistory(job.ownerId);
+  async function enqueue(job, content) {
+    try {
+      const body = JSON.stringify({ job, content });
+      if (await usedStorage(job.ownerId) + Buffer.byteLength(body) + META_RESERVE > accountStorageBytes) throw new InputError(413, storageFull);
+      if (accounts && !(await isLiveAccount(job.ownerId))) throw new InputError(401, 'Tài khoản không còn hoạt động.');
+      await mkdir(jobDir(job), { recursive: true, mode: 0o700 });
+      await atomicJobFile(jobDir(job), 'input.json', body);
+      queue.push(job);
+      pump();
+      return job.id;
+    } catch (error) {
+      jobs.delete(job.id);
+      await forgetJob(job).catch(() => {});
+      throw error;
     }
+  }
+  async function runJob(job) {
+    job.status = 'running'; job.stage = 'Đang kiểm tra tệp ZIP…';
+    const directory = jobDir(job);
+    const inputFile = path.join(directory, 'input.json');
+    const input = await lstat(inputFile);
+    const maxReportBytes = accountStorageBytes - await usedStorage(job.ownerId, job.id) - input.size - META_RESERVE;
+    // Semgrep on Windows needs a short path for its own temporary configuration.
+    const engineWorkspace = job.sourceAnalysis === 'deep'
+      ? path.join(tmpdir(), 'sg-' + Buffer.from(job.id.replaceAll('-', ''), 'hex').toString('base64url'))
+      : undefined;
+    const cleanEngine = () => engineWorkspace
+      ? rm(engineWorkspace, { recursive: true, force: true, maxRetries: 5, retryDelay: 150 }) : undefined;
+    const options = { directory, engineWorkspace, knowledgeDir: knowledgeDir(job.ownerId), maxReportBytes };
+    const onStage = (stage) => { job.stage = stage; };
+    await cleanEngine();
+    const result = maxReportBytes <= 0 ? { error: storageFull } : semgrepRunner
+      ? await scanUpload(options, onStage, semgrepRunner) : await runScanWorker(options, onStage);
+    await cleanEngine();
+    if (accounts && !(await isLiveAccount(job.ownerId))) {
+      await forgetJob(job);
+      return;
+    }
+    await rm(path.join(directory, 'work'), { recursive: true, force: true, maxRetries: 5, retryDelay: 150 });
+    if (result.error) {
+      for (const name of ['report.json', 'report.sarif', 'report.html', 'report.txt']) await rm(path.join(directory, name), { force: true });
+    }
+    const completed = { ...job, ...result, status: result.error ? 'failed' : 'done', finishedAt: new Date().toISOString() };
+    await persistMeta(completed);
+    await rm(inputFile, { force: true });
+    Object.assign(job, completed);
+    delete job.stage;
+    await trimHistory(job.ownerId);
   }
   async function isLiveAccount(ownerId) {
     if (ownerId === 'legacy' || ownerId === 'local') return true;
-    try { return await accounts.exists(ownerId); } catch { return true; }
+    return accounts.exists(ownerId);
   }
 
   const server = http.createServer(async (request, response) => {
@@ -277,6 +349,9 @@ export function createUiServer({ rootDir, semgrepRunner, publicAccess, accountFi
       const directLocal = isLocalHost && ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(request.socket.remoteAddress) &&
         !['forwarded', 'via', 'x-real-ip', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-port']
           .some((name) => request.headers[name] !== undefined);
+      if (!accounts && !authenticationHash && !directLocal) {
+        throw new InputError(403, 'Chế độ cục bộ chỉ nhận kết nối trực tiếp từ máy này.');
+      }
       if (accounts && directLocal && request.method === 'GET' && route === '/api/health') {
         return send(200, { application: 'security-scanner-ui' });
       }
@@ -383,6 +458,9 @@ export function createUiServer({ rootDir, semgrepRunner, publicAccess, accountFi
       if (request.method === 'GET' && route === '/fflate-browser.js') {
         return send(200, await readFile(ZIP_MODULE), 'text/javascript; charset=utf-8');
       }
+      if (request.method === 'GET' && route === '/scan-scope.js') {
+        return send(200, await readFile(new URL('./scan-scope.mjs', import.meta.url)), 'text/javascript; charset=utf-8');
+      }
       if (request.method === 'GET' && ['/', '/app.js', '/style.css'].includes(route)) {
         const file = route === '/' ? 'index.html' : route.slice(1);
         const body = (await readFile(path.join(WEB, file), 'utf8'))
@@ -399,7 +477,7 @@ export function createUiServer({ rootDir, semgrepRunner, publicAccess, accountFi
       if (request.method === 'GET' && route === '/api/knowledge') {
         const query = url.searchParams.get('q') || '';
         const kind = url.searchParams.get('kind') || 'all';
-        if (query.length > 300 || !['all', 'cwe', 'owasp', 'advisory', 'asvs', 'api', 'kev', 'curated'].includes(kind)) throw new InputError(400, 'Bộ lọc thư viện không hợp lệ.');
+        if (query.length > 300 || !['all', 'cwe', 'owasp', 'advisory', 'asvs', 'api', 'kev', 'curated', 'research', 'reference'].includes(kind)) throw new InputError(400, 'Bộ lọc thư viện không hợp lệ.');
         if (kind === 'curated') {
           const results = KNOWLEDGE.filter((entry) => [entry.name, entry.id, ...entry.cwes].join(' ').toLowerCase().includes(query.toLowerCase()));
           return send(200, { results, total: results.length, page: 1, pages: results.length ? 1 : 0 });
@@ -429,9 +507,12 @@ export function createUiServer({ rootDir, semgrepRunner, publicAccess, accountFi
           const userId = matchDelete[1];
           if (!(await accounts.deleteUser(userId))) throw new InputError(404, 'Không tìm thấy tài khoản.');
           for (const [id, entry] of accessSessions) if (entry.userId === userId) accessSessions.delete(id);
-          for (let i = queue.length - 1; i >= 0; i--) if (queue[i].job.ownerId === userId) queue.splice(i, 1);
+          await Promise.allSettled([uploads.get(userId), writeupImports.get(userId)]);
+          for (let i = queue.length - 1; i >= 0; i--) if (queue[i].ownerId === userId) queue.splice(i, 1);
+          if (activeJob?.ownerId === userId) await activeWork;
           for (const [id, job] of jobs) if (job.ownerId === userId && job.status !== 'running') jobs.delete(id);
           await rm(userDir(userId), { recursive: true, force: true }).catch(() => {});
+          await rm(knowledgeDir(userId), { recursive: true, force: true }).catch(() => {});
           return send(200, { deleted: true });
         }
         return send(404, { error: 'Không tìm thấy nội dung.' });
@@ -441,6 +522,14 @@ export function createUiServer({ rootDir, semgrepRunner, publicAccess, accountFi
         return send(200, [...jobs.values()].filter((job) => job.ownerId === identity.userId)
           .sort((a, b) => b.startedAt.localeCompare(a.startedAt)).map(publicJob));
       }
+      const deleteJob = route.match(/^\/api\/jobs\/([a-f0-9-]{36})\/delete$/);
+      if (request.method === 'POST' && deleteJob) {
+        const job = ownedJob(deleteJob[1], identity);
+        if (!job) throw new InputError(404, 'Không tìm thấy lần kiểm tra.');
+        if (!job.finishedAt) throw new InputError(409, 'Chờ lượt quét kết thúc trước khi xóa.');
+        await forgetJob(job);
+        return send(200, { deleted: true });
+      }
       const matchJob = route.match(/^\/api\/jobs\/([a-f0-9-]{36})$/);
       if (request.method === 'GET' && matchJob) {
         const job = ownedJob(matchJob[1], identity);
@@ -449,29 +538,45 @@ export function createUiServer({ rootDir, semgrepRunner, publicAccess, accountFi
         if (job.status === 'done' && !report) throw new InputError(404, 'Không tìm thấy lần kiểm tra.');
         return send(200, { ...publicJob(job), ...(report ? { report } : {}) });
       }
-      const matchFile = route.match(/^\/api\/reports\/([a-f0-9-]{36})\/(json|html|txt)$/);
+      const matchFile = route.match(/^\/api\/reports\/([a-f0-9-]{36})\/(json|html|txt|sarif)$/);
       if (request.method === 'GET' && matchFile) {
         const job = ownedJob(matchFile[1], identity);
         const report = job?.status === 'done' ? await readJobReport(job) : undefined;
         if (!report) throw new InputError(404, 'Báo cáo chưa sẵn sàng.');
         const format = matchFile[2];
-        const body = format === 'json' ? JSON.stringify(report, null, 2) : format === 'html' ? renderHtml(report) : renderText(report);
+        const body = format === 'json' ? JSON.stringify(report, null, 2) : format === 'sarif' ? JSON.stringify(renderSarif(report), null, 2) : format === 'html' ? renderHtml(report) : renderText(report);
         return send(200, body, 'application/octet-stream', { 'Content-Disposition': `attachment; filename="security-report.${format}"` });
       }
       if (request.method === 'POST' && route === '/api/upload') {
-        const data = await readJson(request, 30 * 1024 * 1024);
-        return send(202, { id: startJob(data, identity) });
+        if (uploadRequests.has(identity.userId)) throw new InputError(409, 'Một tệp ZIP của tài khoản đang được nhận.');
+        if (uploadRequests.size >= 4) throw new InputError(503, 'Đang nhận nhiều tệp ZIP. Hãy thử lại sau.');
+        uploadRequests.add(identity.userId);
+        try {
+          const data = await readJson(request, UPLOAD_BODY_BYTES);
+          return send(202, { id: await startJob(data, identity) });
+        } finally { uploadRequests.delete(identity.userId); }
       }
       if (request.method === 'POST' && route === '/api/writeups') {
         const data = await readJson(request, 1024 * 1024 + 4096);
         if (typeof data.text !== 'string' || !data.text.trim() || Buffer.byteLength(data.text) > 1024 * 1024) throw new InputError(400, 'Nhập ghi chú/write-up từ 1 byte đến 1 MiB.');
-        const temporary = await mkdtemp(path.join(tmpdir(), 'scanner-note-'));
+        if (writeupImports.has(identity.userId)) throw new InputError(409, 'Đang nhập một write-up khác.');
+        const work = (async () => {
+          if (accounts && !(await isLiveAccount(identity.userId))) throw new InputError(401, 'Tài khoản không còn hoạt động.');
+          const temporary = await mkdtemp(path.join(tmpdir(), 'scanner-note-'));
+          try {
+            const input = path.join(temporary, 'notes.md');
+            await writeFile(input, data.text, { mode: 0o600 });
+            return await importWriteup(input, knowledgeDir(identity.userId), { maxEntries: 100 });
+          } finally { await rm(temporary, { force: true, recursive: true }); }
+        })();
+        writeupImports.set(identity.userId, work);
         try {
-          const input = path.join(temporary, 'notes.md');
-          await writeFile(input, data.text, { mode: 0o600 });
-          const imported = await importWriteup(input, knowledgeDir);
+          const imported = await work;
           return send(200, { topics: imported.topics, references: imported.references, id: imported.id });
-        } finally { await rm(temporary, { force: true, recursive: true }); }
+        } catch (error) {
+          if (error instanceof WriteupLimitError) throw new InputError(413, error.message);
+          throw error;
+        } finally { writeupImports.delete(identity.userId); }
       }
       return send(404, { error: 'Không tìm thấy nội dung.' });
     } catch (error) {
@@ -479,9 +584,11 @@ export function createUiServer({ rootDir, semgrepRunner, publicAccess, accountFi
     }
   });
   server.requestTimeout = 15000; server.headersTimeout = 10000;
+  server.on('close', () => { closing = true; });
   if (retentionMs) {
-    void sweepReports();
-    const sweeper = setInterval(() => void sweepReports(), Math.min(RETENTION_SWEEP_MS, retentionMs));
+    const sweep = () => { void sweepReports().catch(() => {}); };
+    sweep();
+    const sweeper = setInterval(sweep, Math.min(RETENTION_SWEEP_MS, retentionMs));
     sweeper.unref();
     server.on('close', () => clearInterval(sweeper));
   }

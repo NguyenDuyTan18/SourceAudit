@@ -1,0 +1,93 @@
+[
+  {
+    "id": "REFERENCE-NIST-SSDF-1.1",
+    "kind": "reference",
+    "name": "Secure Software Development Framework (SSDF) v1.1",
+    "publication": "NIST SP 800-218 · NIST",
+    "description": "Thực hành PW.7 đặt rà soát và phân tích mã trong quy trình phát triển, với trách nhiệm phân loại phát hiện và ghi nhận biện pháp khắc phục.",
+    "reviewSteps": [
+      "Dùng SrcAudit để thu bằng chứng tại vị trí mã, sau đó xác minh điều kiện áp dụng và giao người chịu trách nhiệm sửa.",
+      "Chạy lại kiểm thử sau khi sửa và lưu kết quả theo phiên bản công cụ, quy tắc và mã nguồn đã quét."
+    ],
+    "tags": ["NIST", "SSDF", "PW.7", "SDLC"],
+    "references": ["https://csrc.nist.gov/pubs/sp/800/218/final", "https://pages.nist.gov/nccoe-devsecops/appendix-c.html"]
+  },
+  {
+    "id": "REFERENCE-OPENSSF-OSPS",
+    "kind": "reference",
+    "name": "Open Source Project Security Baseline",
+    "publication": "OpenSSF · OSPS Baseline",
+    "description": "Bộ kiểm soát bảo mật cho dự án mã nguồn mở, tổ chức theo nhóm và cấp trưởng thành.",
+    "reviewSteps": [
+      "Đối chiếu từng kiểm soát với bằng chứng của repo như tài liệu cài đặt, chính sách bảo mật, quyền CI và tham chiếu phiên bản cố định.",
+      "Ghi rõ phiên bản checklist khi tự đánh giá. Một báo cáo SAST chỉ cung cấp bằng chứng cho một phần quy trình."
+    ],
+    "tags": ["OpenSSF", "OSPS", "mã nguồn mở", "phát hành"],
+    "references": ["https://baseline.openssf.org/"]
+  },
+  {
+    "id": "REFERENCE-OWASP-SAMM-TESTING",
+    "kind": "reference",
+    "name": "OWASP SAMM Security Testing",
+    "publication": "OWASP · Software Assurance Maturity Model",
+    "description": "Kết hợp kiểm tra tự động lặp lại với rà soát chuyên sâu theo rủi ro, ngữ cảnh ứng dụng và logic nghiệp vụ.",
+    "reviewSteps": [
+      "Bắt đầu từ kiểm tra tự động có thể lặp lại trong CI, sau đó ưu tiên rà thủ công phần mới thay đổi hoặc có tác động cao.",
+      "Dùng kết quả quét để dẫn đường cho người rà soát; đánh giá riêng phân quyền và luồng nghiệp vụ theo thiết kế thực tế."
+    ],
+    "tags": ["OWASP", "SAMM", "kiểm thử", "SAST"],
+    "references": ["https://owaspsamm.org/model/verification/security-testing/"]
+  },
+  {
+    "id": "REFERENCE-OWASP-BENCHMARK",
+    "kind": "reference",
+    "name": "OWASP Benchmark và phép đo độ chính xác SAST",
+    "publication": "OWASP · Benchmark Project",
+    "description": "Bộ mẫu có nhãn theo nhóm CWE giúp đo phát hiện đúng, báo nhầm và bỏ sót với cùng một quy trình đánh giá.",
+    "reviewSteps": [
+      "Đọc precision, recall và tỷ lệ báo nhầm cùng nhau. Ghi rõ bộ dữ liệu, phiên bản, chế độ quét và mẫu số.",
+      "Đối chiếu thêm trên những dự án thật đã được rà. Kết quả benchmark mô tả bộ mẫu đã chọn."
+    ],
+    "tags": ["OWASP", "benchmark", "precision", "recall"],
+    "references": ["https://owasp.org/projects/benchmark?tab=scoring"]
+  },
+  {
+    "id": "REFERENCE-OSV-SCHEMA",
+    "kind": "reference",
+    "name": "Open Source Vulnerability schema và khoảng phiên bản",
+    "publication": "OpenSSF · OSV Schema",
+    "description": "OSV mô tả package, hệ sinh thái, tập phiên bản hoặc khoảng phiên bản bị ảnh hưởng, kiểu so sánh và các định danh liên quan.",
+    "reviewSteps": [
+      "Khi đối chiếu thủ công, dùng phiên bản đã resolve từ lockfile, chọn đúng ecosystem và kiểu so sánh phiên bản.",
+      "Đọc advisory gốc để xác minh khoảng ảnh hưởng và bản vá. OSV Schema là tài liệu đối chiếu; snapshot dependency của SrcAudit dùng nguồn được ghi trong manifest."
+    ],
+    "tags": ["OSV", "SBOM", "dependency", "phiên bản"],
+    "references": ["https://ossf.github.io/osv-schema/", "https://google.github.io/osv.dev/data/"]
+  },
+  {
+    "id": "REFERENCE-GITHUB-SARIF",
+    "kind": "reference",
+    "name": "SARIF cho GitHub Code Scanning",
+    "publication": "GitHub Docs · Code Security",
+    "description": "GitHub Code Scanning tiếp nhận kết quả SARIF từ công cụ phân tích bên ngoài. Vị trí, mã quy tắc và fingerprint giúp đối chiếu cảnh báo giữa các lượt.",
+    "reviewSteps": [
+      "Kiểm tra đường dẫn báo cáo tương đối với repository và cảnh báo đã được rà trước khi chia sẻ SARIF.",
+      "Chỉ bật upload nơi được phép lưu báo cáo. Dùng quyền tối thiểu cho job chạy quét và cho bước upload."
+    ],
+    "tags": ["SARIF", "GitHub", "CI", "báo cáo"],
+    "references": ["https://docs.github.com/en/code-security/how-tos/find-and-fix-code-vulnerabilities/integrate-with-existing-tools/upload-sarif-file"]
+  },
+  {
+    "id": "REFERENCE-OPENSSF-SCORECARD",
+    "kind": "reference",
+    "name": "OpenSSF Scorecard về quyền token và dependency CI",
+    "publication": "OpenSSF · Scorecard",
+    "description": "Các kiểm tra của Scorecard giúp rà quyền workflow, tham chiếu dependency cố định và thực hành bảo vệ kho mã.",
+    "reviewSteps": [
+      "Ghim GitHub Actions theo commit đã đối chiếu từ nguồn chính thức và ghi phiên bản bên cạnh để tiện cập nhật.",
+      "Khai báo quyền token tối thiểu, tắt lưu credential checkout nếu job chỉ cần đọc và xem xét cập nhật theo từng phiên bản."
+    ],
+    "tags": ["OpenSSF", "Scorecard", "GitHub Actions", "supply chain"],
+    "references": ["https://github.com/ossf/scorecard/blob/main/docs/faq.md", "https://docs.github.com/en/actions/reference/security/secure-use"]
+  }
+]

@@ -116,6 +116,40 @@ test('Semgrep failures retain a usable report message without exposing child out
   assert.equal(malformed.status, 'failed');
 });
 
+test('Python path review keeps warnings when the rewritten copy was skipped, failed or still has a path warning', async () => {
+  const original = 'return open(f"{root}/{suffix}")';
+  const output = (results, scanned, errors = []) => ({ stdout: JSON.stringify({ results, errors, paths: { scanned } }) });
+  const match = (file) => ({ check_id: 'srcaudit-python-request-file-path', path: file, start: { line: 1, col: 13 } });
+  const copy = 'python-review/0.py';
+  const scenarios = [
+    { review: output([], [copy]), status: 'complete', filtered: 1 },
+    { review: output([match(copy)], [copy]), status: 'complete', filtered: 0 },
+    { review: output([], []), status: 'unavailable', filtered: 0 },
+    { review: output([], [copy], [{ type: 'Parse error' }]), status: 'unavailable', filtered: 0 },
+  ];
+  for (const { review, status, filtered } of scenarios) {
+    const result = await runSemgrep([{ file: 'report.py', text: original }], {
+      run: async (_command, args, { cwd }) => {
+        if (args.at(-1) === 'targets') return output([match('targets/1.py')], ['targets/1.py']);
+        if (args.includes('-I')) {
+          assert.ok(args.includes('-S'));
+          const start = original.indexOf('suffix');
+          return { stdout: JSON.stringify([[0, [[1, start, start + 6, "'summary.txt'"]]]]) };
+        }
+        assert.equal(args.at(-1), 'python-review');
+        assert.equal(await readFile(path.join(cwd, copy), 'utf8'), 'return open(f"{root}/{\'summary.txt\'}")');
+        assert.equal(await readFile(path.join(cwd, 'targets/1.py'), 'utf8'), original);
+        return review;
+      },
+    });
+    assert.equal(result.status, 'complete');
+    assert.equal(result.pythonPrecision?.pathRecheck, status);
+    assert.equal(result.pythonPrecision.filtered, filtered);
+    assert.equal(result.findings.length, 1 - filtered);
+    if (!filtered) assert.deepEqual(result.findings[0].location, { file: 'report.py', line: 1, column: 13 });
+  }
+});
+
 test('deep findings locate the matched code and redact literal, comment and JSX content in exports', async () => {
   const text = [
     'function route(req: Request) {',
