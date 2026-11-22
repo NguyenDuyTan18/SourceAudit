@@ -1,5 +1,7 @@
 # SrcAudit
 
+[Tiếng Việt](README.vi.md)
+
 SrcAudit is a local static application security testing tool. It scans source code and dependency lockfiles, then reports locations, redacted evidence and remediation guidance.
 
 ## Run with Docker Compose
