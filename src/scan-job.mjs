@@ -9,7 +9,7 @@ import { finishReport, ReportSizeError, writeReports } from './report.mjs';
 import { enrichReport, loadWriteups } from './knowledge.mjs';
 
 const workerFile = fileURLToPath(import.meta.url);
-const interrupted = { error: 'Tiến trình quét bị gián đoạn hoặc vượt giới hạn thời gian.' };
+const interrupted = { error: 'The scan was interrupted or expired.' };
 
 export async function scanUpload({ directory, engineWorkspace, knowledgeDir, maxReportBytes }, onStage, semgrepRunner) {
   const workspace = path.join(directory, 'work');
@@ -19,7 +19,7 @@ export async function scanUpload({ directory, engineWorkspace, knowledgeDir, max
     await mkdir(workspace);
     const { content, job } = JSON.parse(await readFile(path.join(directory, 'input.json'), 'utf8'));
     uploaded = await prepareZipUpload(content, { temporaryDirectory: workspace });
-    onStage(job.sourceAnalysis === 'deep' ? 'Semgrep và bộ kiểm tra dependency đang phân tích…' : 'Đang quét mã nguồn…');
+    onStage(job.sourceAnalysis === 'deep' ? 'Running Semgrep and checking dependencies...' : 'Scanning source code...');
     const report = await scanSource(uploaded.rootDir, {
       analysis: job.sourceAnalysis,
       semgrepRunner: semgrepRunner ?? ((files) => runSemgrep(files, { workspaceDirectory: engineWorkspace })),
@@ -37,8 +37,8 @@ export async function scanUpload({ directory, engineWorkspace, knowledgeDir, max
     return { target: report.target, count: report.findings.length, scanStatus: report.status };
   } catch (error) {
     return { error: error instanceof ZipInputError || error instanceof ReportSizeError ? error.message
-      : uploaded ? 'Lượt quét bị gián đoạn. Kiểm tra quyền ghi báo cáo hoặc thử lại với một mẫu nhỏ.'
-        : 'Không đọc được nội dung ZIP. Hãy nén lại thư mục hoặc dùng chế độ Tải thư mục.' };
+      : uploaded ? 'The scan was interrupted. Verify report storage permissions or try a smaller source archive.'
+        : 'Could not prepare the ZIP archive for scanning.' };
   }
 }
 

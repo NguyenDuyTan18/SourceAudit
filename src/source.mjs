@@ -24,32 +24,32 @@ export function isSupportedSourceFile(name) {
 }
 const ref = (cwe) => `https://cwe.mitre.org/data/definitions/${cwe}.html`;
 const rules = [
-  { id: 'SRC-SSRF', cwe: 918, severity: 'medium', title: 'HTTP client nhận URL từ request', match: /\b(?:fetch|axios\.(?:get|post|request)|requests\.(?:get|post)|urllib\.request\.urlopen)\s*\([^\n]*(?:req\.(?:query|body|params)|request\.(?:args|form|GET|POST))/, impact: 'Nếu URL đích không bị giới hạn, server có thể bị dùng để truy cập tài nguyên ngoài phạm vi.', fix: 'Kiểm tra allowlist đích, scheme, toàn bộ IP DNS và từng redirect; giới hạn outbound network. Cần kiểm chứng biện pháp bảo vệ hiện có.' },
-  { id: 'SRC-PATH', cwe: 22, severity: 'medium', title: 'API truy cập file nhận đầu vào từ request', match: /\b(?:readFile(?:Sync)?|sendFile|send_file|open|file_get_contents)\s*\([^\n]*(?:req\.(?:query|body|params)|request\.(?:args|form|GET|POST)|\$_(?:GET|POST|REQUEST))/, impact: 'Nếu đường dẫn không bị ràng buộc, có thể đọc file ngoài thư mục cho phép.', fix: 'Resolve/canonicalize đường dẫn và kiểm tra nằm trong root cho phép; xử lý symlink và quyền file.' },
-  { id: 'SRC-SSTI', cwe: 1336, severity: 'high', title: 'Template động nhận dữ liệu từ request', match: /\b(?:render_template_string|from_string|ejs\.render)\s*\([^\n]*(?:req\.|request\.)/, impact: 'Dữ liệu người dùng trở thành mã template có thể thực thi biểu thức ngoài ý muốn.', fix: 'Dùng template cố định, chỉ truyền đầu vào dưới dạng dữ liệu; kiểm tra engine và cơ chế sandbox.' },
-  { id: 'SRC-PROTOTYPE', cwe: 1321, severity: 'medium', title: 'Merge dữ liệu request vào object cần kiểm tra', match: /\b(?:merge|defaultsDeep|extend)\s*\([^\n]*(?:req\.body|request\.body)|\[\s*(?:req\.(?:query|body|params)[^\]]*)\]\s*=/, impact: 'Merge/key động không được bảo vệ có thể gây prototype pollution; phụ thuộc thư viện và cách sử dụng.', fix: 'Xác minh phiên bản/triển khai merge; chặn key nguy hiểm ở mọi cấp, dùng schema và object không có prototype khi phù hợp.' },
-  { id: 'SRC-XXE', cwe: 611, severity: 'medium', title: 'XML parser bật xử lý external entity', match: /\bresolve_entities\s*=\s*True\b|\bLIBXML_NOENT\b|\bXmlResolver\s*=\s*new\s+XmlUrlResolver/, impact: 'External entity có thể truy cập file hoặc mạng nếu parser và quyền runtime cho phép.', fix: 'Tắt DTD/external entity và network access theo cấu hình XML parser đang sử dụng.' },
-  { id: 'SRC-JWT', cwe: 347, severity: 'high', title: 'JWT bị tắt kiểm tra chữ ký', match: /\bverify_signature["']?\s*[:=]\s*(?:False|false)\b|\bjwt\.decode\s*\([^\n]*\bverify\s*=\s*False/, impact: 'Nếu kết quả được dùng để xác thực/phân quyền, token không có chữ ký hợp lệ có thể được tin cậy.', fix: 'Verify chữ ký, allowlist thuật toán và kiểm tra issuer/audience/expiry trước khi dùng claim.' },
-  { id: 'SRC-EVAL', cwe: 95, severity: 'high', title: 'Thực thi code động cần kiểm tra', match: /\b(?:eval|exec)\s*\(/, exts: ['.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx', '.py', '.php'], impact: 'Nếu đầu vào đến từ người dùng, có thể chạy code ngoài ý muốn.', fix: 'Thay eval/exec bằng parser hoặc thao tác tường minh; không truyền dữ liệu không tin cậy vào code động.' },
-  { id: 'SRC-SHELL', cwe: 78, severity: 'high', title: 'Gọi shell hoặc lệnh hệ thống cần kiểm tra', match: /\b(?:child_process\s*\.\s*exec|execSync|os\s*\.\s*system|shell_exec|passthru|(?<![.\w])system)\s*\(|\bshell\s*=\s*True\b|\b(?:exec|execFile)\s*\([^\n]*(?:req\.|request\.|\$_(?:GET|POST|REQUEST))/, impact: 'Đầu vào không tin cậy ghép vào lệnh có thể dẫn đến command injection.', fix: 'Dùng API không qua shell, truyền danh sách đối số; allowlist lệnh và tham số. Kiểm tra nguồn dữ liệu trước khi xác nhận.' },
-  { id: 'SRC-SQL', cwe: 89, severity: 'high', title: 'Câu SQL được ghép chuỗi cần kiểm tra', match: /\b(?:SELECT|INSERT|UPDATE|DELETE)\b[^\n]*(?:\+|\$\{|\s\.\s|\$_(?:GET|POST|REQUEST))|\b(?:execute|query)\s*\(\s*f["']/, impact: 'Nếu dữ liệu người dùng được ghép trực tiếp, có nguy cơ SQL injection.', fix: 'Dùng truy vấn tham số hóa hoặc prepared statement; không tự escape bằng thay thế chuỗi.' },
-  { id: 'SRC-XSS', cwe: 79, severity: 'medium', title: 'Điểm xuất HTML có nguy cơ XSS', match: /\.\s*(?:innerHTML|outerHTML)\s*=|\bdangerouslySetInnerHTML\s*[:=]|\bdocument\.write\s*\(|\bres\.(?:send|write)\s*\([^\n]*(?:req\.|request\.)|\becho\s+\$_(?:GET|POST|REQUEST)/, impact: 'Dữ liệu không được escape hoặc sanitize có thể thực thi script trong trình duyệt.', fix: 'Dùng textContent hoặc template tự escape; nếu cần HTML, dùng bộ sanitize phù hợp và kiểm tra luồng dữ liệu.' },
-  { id: 'SRC-DESERIALIZE', cwe: 502, severity: 'high', title: 'Giải tuần tự dữ liệu cần kiểm tra', match: /\b(?:pickle\.loads?|unserialize)\s*\(|\byaml\.load\s*\((?![^\n]*(?:SafeLoader|BaseLoader))/, impact: 'Giải tuần tự dữ liệu không tin cậy có thể tạo đối tượng hoặc thực thi code ngoài ý muốn.', fix: 'Dùng JSON có schema, yaml.safe_load hoặc cơ chế giải tuần tự không tạo đối tượng tùy ý.' },
-  { id: 'SRC-TLS-VERIFY', cwe: 295, severity: 'medium', title: 'Tắt xác minh chứng chỉ TLS', match: /\brejectUnauthorized\s*:\s*false\b|\bverify\s*=\s*False\b|\bNODE_TLS_REJECT_UNAUTHORIZED\s*=\s*["']?0\b|CURLOPT_SSL_VERIFYPEER\s*,\s*(?:false|0)/, impact: 'Kết nối có thể chấp nhận máy chủ giả mạo khi chứng chỉ không được xác minh.', fix: 'Bật xác minh chứng chỉ và cấu hình CA tin cậy thay vì tắt xác minh.' },
-  { id: 'SRC-PY-TLS-CONTEXT', cwe: 295, severity: 'medium', title: 'Python tạo TLS context không xác minh máy chủ', exts: ['.py'], match: /\bssl\._create_unverified_context\s*\(/, impact: 'Kết nối HTTPS dùng context này có thể chấp nhận chứng chỉ không đáng tin.', fix: 'Dùng ssl.create_default_context() và cấu hình CA tin cậy khi cần.', condition: 'Xác minh context thực sự được dùng cho kết nối phía máy khách và có được đổi cấu hình trước khi kết nối hay không.', reference: 'https://peps.python.org/pep-0476/#opting-out' },
-  { id: 'SRC-PY-INSECURE-COOKIE', cwe: 614, severity: 'low', title: 'Lời gọi set_cookie() đặt secure=False', exts: ['.py'], match: /\.set_cookie\s*\(/, check: explicitlyInsecureCookie, impact: 'Nếu không có lớp triển khai bổ sung cờ Secure, trình duyệt có thể gửi cookie qua HTTP.', fix: 'Đặt secure=True cho cookie nhạy cảm khi phục vụ qua HTTPS.', condition: 'Xác minh phương thức đặt cookie HTTP, dữ liệu cookie và header Set-Cookie ở môi trường triển khai.', reference: 'https://flask.palletsprojects.com/en/stable/web-security/#set-cookie-options' },
-  { id: 'SRC-PY-WEAK-RANDOM', cwe: 338, severity: 'low', title: 'Python dùng bộ sinh giả ngẫu nhiên random', exts: ['.py'], match: /(?<![\w.])random\.(?:getrandbits|randbytes|random|randint|randrange|choice|choices|sample|shuffle|uniform|normalvariate)\s*\(/, impact: 'Kết quả từ bộ sinh mặc định có thể dự đoán được nếu dùng để tạo bí mật hoặc mã xác thực.', fix: 'Dùng secrets hoặc nguồn ngẫu nhiên mật mã tương đương cho giá trị bảo mật.', condition: 'Truy vết kết quả đến token, khóa hoặc quyết định bảo mật. Dùng random cho mô phỏng và lấy mẫu phi bảo mật có thể phù hợp.', reference: 'https://docs.python.org/3/library/secrets.html' },
-  { id: 'SRC-DEBUG', cwe: 489, severity: 'low', title: 'Cấu hình debug đang bật', match: /\bdebug\s*[:=]\s*(?:true|True|1)\b|\b(?:APP_DEBUG|DEBUG)\s*=\s*(?:true|True|1)\b/, impact: 'Nếu dùng trong production, debug có thể lộ thông tin nội bộ hoặc chi tiết lỗi.', fix: 'Tắt debug trong production; kiểm tra môi trường triển khai thực tế.' },
-  { id: 'SRC-HASH', cwe: 327, severity: 'low', title: 'Thuật toán hash yếu cần kiểm tra mục đích', match: /\b(?:md5|sha1)\s*\(|\b(?:createHash|hashlib\.new)\s*\(\s*(["'])(?:[mM][dD]5|[sS][hH][aA]1)\1/, impact: 'MD5/SHA-1 không phù hợp để lưu mật khẩu hoặc bảo vệ dữ liệu trước va chạm.', fix: 'Dùng Argon2id/scrypt cho mật khẩu; dùng SHA-256 trở lên khi cần một hàm băm chống va chạm.', condition: 'Kiểm tra digest có tham gia xác thực hoặc bảo vệ tính toàn vẹn trước sửa đổi có chủ đích hay chỉ làm checksum phi bảo mật.' },
-  { id: 'SRC-SECRET', cwe: 798, severity: 'high', title: 'Có thể chứa thông tin xác thực hardcode', secret: true, match: /(?:["']?\b(?:password|passwd|api[_-]?key|secret(?:[_-]?key)?|access[_-]?token|auth[_-]?token)["']?\s*[:=]\s*["'][^"'\r\n]{8,}["'])|(?:\b(?:AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{24,}|sk_live_[A-Za-z0-9]{16,})\b)/i, impact: 'Nếu là credential thật, người có quyền đọc mã nguồn có thể sử dụng để truy cập tài nguyên.', fix: 'Xác minh credential; nếu thật, thu hồi/rotate và chuyển vào biến môi trường hoặc secret manager. Không chỉ xóa khỏi commit mới.' },
-  { id: 'SRC-PRIVATE-KEY', cwe: 321, severity: 'high', title: 'Tệp có dấu hiệu chứa private key', secret: true, match: /-----BEGIN (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----/, impact: 'Private key được đưa vào mã nguồn có thể làm lộ danh tính hoặc quyền truy cập.', fix: 'Xác minh đây có phải key thật; nếu có, thay key/certificate và loại bỏ khỏi repo cùng lịch sử khi phù hợp.' }
+  { id: 'SRC-SSRF', cwe: 918, severity: 'medium', title: "HTTP client receives a URL from the request", match: /\b(?:fetch|axios\.(?:get|post|request)|requests\.(?:get|post)|urllib\.request\.urlopen)\s*\([^\n]*(?:req\.(?:query|body|params)|request\.(?:args|form|GET|POST))/, impact: "An unrestricted destination may let the server access unintended resources.", fix: "Allowlist destinations. Validate the scheme, resolved addresses and each redirect, and restrict outbound network access." },
+  { id: 'SRC-PATH', cwe: 22, severity: 'medium', title: "File API receives a path from the request", match: /\b(?:readFile(?:Sync)?|sendFile|send_file|open|file_get_contents)\s*\([^\n]*(?:req\.(?:query|body|params)|request\.(?:args|form|GET|POST)|\$_(?:GET|POST|REQUEST))/, impact: "An unchecked path may resolve outside the allowed directory.", fix: "Resolve the path and verify it stays under an allowed root. Account for symbolic links and file permissions." },
+  { id: 'SRC-SSTI', cwe: 1336, severity: 'high', title: "Server-side template uses request data as source", match: /\b(?:render_template_string|from_string|ejs\.render)\s*\([^\n]*(?:req\.|request\.)/, impact: "The template engine may evaluate expressions supplied by a user.", fix: "Use a fixed template and pass user input as data. Review the template engine and its sandbox configuration." },
+  { id: 'SRC-PROTOTYPE', cwe: 1321, severity: 'medium', title: "Request data is used in an object merge or property assignment", match: /\b(?:merge|defaultsDeep|extend)\s*\([^\n]*(?:req\.body|request\.body)|\[\s*(?:req\.(?:query|body|params)[^\]]*)\]\s*=/, impact: "An unsafe merge or assignment may modify object prototypes, depending on the library and how it is used.", fix: "Allowlist fields recursively and reject dangerous keys. Review the merge library and version." },
+  { id: 'SRC-XXE', cwe: 611, severity: 'medium', title: "XML parser enables external entities", match: /\bresolve_entities\s*=\s*True\b|\bLIBXML_NOENT\b|\bXmlResolver\s*=\s*new\s+XmlUrlResolver/, impact: "The parser may access files or the network with the application's permissions.", fix: "Disable external entities and DTD processing according to the XML parser's configuration." },
+  { id: 'SRC-JWT', cwe: 347, severity: 'high', title: "JWT signature validation is disabled", match: /\bverify_signature["']?\s*[:=]\s*(?:False|false)\b|\bjwt\.decode\s*\([^\n]*\bverify\s*=\s*False/, impact: "Tokens with missing or invalid signatures may be trusted for authentication or authorization.", fix: "Verify the signature and allowlist algorithms. Check the issuer, audience and expiration before trusting claims." },
+  { id: 'SRC-EVAL', cwe: 95, severity: 'high', title: "Dynamic code execution requires review", match: /\b(?:eval|exec)\s*\(/, exts: ['.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx', '.py', '.php'], impact: "User-controlled data may execute as code with the application's permissions.", fix: "Use a data parser or a fixed set of operations in place of dynamic evaluation." },
+  { id: 'SRC-SHELL', cwe: 78, severity: 'high', title: "Shell or system command requires review", match: /\b(?:child_process\s*\.\s*exec|execSync|os\s*\.\s*system|shell_exec|passthru|(?<![.\w])system)\s*\(|\bshell\s*=\s*True\b|\b(?:exec|execFile)\s*\([^\n]*(?:req\.|request\.|\$_(?:GET|POST|REQUEST))/, impact: "Untrusted data embedded in a command can change what runs.", fix: "Use a process API with a separate argument list and no shell. Allowlist programs and validate arguments." },
+  { id: 'SRC-SQL', cwe: 89, severity: 'high', title: "SQL string construction requires review", match: /\b(?:SELECT|INSERT|UPDATE|DELETE)\b[^\n]*(?:\+|\$\{|\s\.\s|\$_(?:GET|POST|REQUEST))|\b(?:execute|query)\s*\(\s*f["']/, impact: "Concatenating untrusted input into SQL may change the query.", fix: "Use parameterized queries or prepared statements. Allowlist dynamic SQL identifiers." },
+  { id: 'SRC-XSS', cwe: 79, severity: 'medium', title: "HTML output may expose an XSS risk", match: /\.\s*(?:innerHTML|outerHTML)\s*=|\bdangerouslySetInnerHTML\s*[:=]|\bdocument\.write\s*\(|\bres\.(?:send|write)\s*\([^\n]*(?:req\.|request\.)|\becho\s+\$_(?:GET|POST|REQUEST)/, impact: "Unescaped or unsanitized data may run as script in a browser.", fix: "Use textContent or contextual output encoding. Sanitize HTML when the application must accept markup." },
+  { id: 'SRC-DESERIALIZE', cwe: 502, severity: 'high', title: "Deserialization of untrusted data requires review", match: /\b(?:pickle\.loads?|unserialize)\s*\(|\byaml\.load\s*\((?![^\n]*(?:SafeLoader|BaseLoader))/, impact: "The deserializer may construct unexpected objects or execute unintended code.", fix: "Use a schema-validated data format or a safe loader that cannot construct arbitrary objects." },
+  { id: 'SRC-TLS-VERIFY', cwe: 295, severity: 'medium', title: "TLS certificate verification is disabled", match: /\brejectUnauthorized\s*:\s*false\b|\bverify\s*=\s*False\b|\bNODE_TLS_REJECT_UNAUTHORIZED\s*=\s*["']?0\b|CURLOPT_SSL_VERIFYPEER\s*,\s*(?:false|0)/, impact: "The client may accept a server presenting an invalid certificate.", fix: "Enable certificate and hostname verification. Configure a trusted CA if needed." },
+  { id: 'SRC-PY-TLS-CONTEXT', cwe: 295, severity: 'medium', title: "Python TLS context disables server verification", exts: ['.py'], match: /\bssl\._create_unverified_context\s*\(/, impact: "HTTPS connections using this context can accept an invalid certificate.", fix: "Use ssl.create_default_context() and configure the trusted CA if needed.", condition: "Verify the context is used for an outbound client connection and review its final settings.", reference: 'https://peps.python.org/pep-0476/#opting-out' },
+  { id: 'SRC-PY-INSECURE-COOKIE', cwe: 614, severity: 'low', title: "Python set_cookie() uses secure=False", exts: ['.py'], match: /\.set_cookie\s*\(/, check: explicitlyInsecureCookie, impact: "A browser may send the cookie over HTTP.", fix: "Set secure=True for sensitive cookies served over HTTPS.", condition: "Review the cookie's purpose and the final Set-Cookie header in the deployed application.", reference: 'https://flask.palletsprojects.com/en/stable/web-security/#set-cookie-options' },
+  { id: 'SRC-PY-WEAK-RANDOM', cwe: 338, severity: 'low', title: "Python uses a non-cryptographic random generator", exts: ['.py'], match: /(?<![\w.])random\.(?:getrandbits|randbytes|random|randint|randrange|choice|choices|sample|shuffle|uniform|normalvariate)\s*\(/, impact: "Predictable random values weaken secrets, tokens and authentication codes.", fix: "Use the secrets module or another cryptographic random source for security-sensitive values.", condition: "Trace the result to a secret or security decision. The random module is suitable for simulations and other non-security uses.", reference: 'https://docs.python.org/3/library/secrets.html' },
+  { id: 'SRC-DEBUG', cwe: 489, severity: 'low', title: "Debug mode is enabled", match: /\bdebug\s*[:=]\s*(?:true|True|1)\b|\b(?:APP_DEBUG|DEBUG)\s*=\s*(?:true|True|1)\b/, impact: "A production service may expose internal details or verbose errors.", fix: "Disable debug mode in production and verify the deployed configuration." },
+  { id: 'SRC-HASH', cwe: 327, severity: 'low', title: "Use of MD5 or SHA-1 requires review", match: /\b(?:md5|sha1)\s*\(|\b(?:createHash|hashlib\.new)\s*\(\s*(["'])(?:[mM][dD]5|[sS][hH][aA]1)\1/, impact: "These digests lack adequate collision resistance for security-sensitive use.", fix: "Use SHA-256 or stronger for collision resistance. Use Argon2id or scrypt for password hashing.", condition: "Determine whether the digest protects integrity or participates in authentication, or is used as a non-security checksum." },
+  { id: 'SRC-SECRET', cwe: 798, severity: 'high', title: "Possible embedded credential", secret: true, match: /(?:["']?\b(?:password|passwd|api[_-]?key|secret(?:[_-]?key)?|access[_-]?token|auth[_-]?token)["']?\s*[:=]\s*["'][^"'\r\n]{8,}["'])|(?:\b(?:AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{24,}|sk_live_[A-Za-z0-9]{16,})\b)/i, impact: "A real credential in source may allow readers to access protected resources.", fix: "Confirm whether the value is a credential. If confirmed, revoke or rotate it and move it to a secrets manager or runtime configuration." },
+  { id: 'SRC-PRIVATE-KEY', cwe: 321, severity: 'high', title: "Possible private key in source", secret: true, match: /-----BEGIN (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----/, impact: "A real private key in source may expose a service identity or grant access.", fix: "Confirm whether the value is a private key. If confirmed, replace it and review repository history and access." }
 ];
 
 rules.push(...EXTENDED_RULES, ...SCENARIO_RULES);
 export const SOURCE_RULES = [...rules.map(({ id, title, cwe, severity, condition }) => ({ id, title, cwe: `CWE-${cwe}`, severity, condition })), ...FLOW_RULES];
 
 function evidence(line, secret) {
-  if (secret) return '[REDACTED: dấu hiệu credential/private key; mở vị trí trên máy để kiểm chứng]';
+  if (secret) return '[REDACTED: Possible credential or private key. Review the original line locally.]';
   return line.replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g, '"[literal redacted]"')
     .replace(/\b[A-Za-z0-9_+/=-]{24,}\b/g, '[long value redacted]').trim().slice(0, 300);
 }
@@ -92,11 +92,11 @@ function groupFlowFindings(findings) {
 
 export async function scanSource(input, options = {}) {
   const analysis = options.analysis ?? 'quick';
-  if (!['quick', 'deep'].includes(analysis)) throw new Error('Chế độ quét mã nguồn không hợp lệ.');
+  if (!['quick', 'deep'].includes(analysis)) throw new Error('Invalid source scan mode.');
   const deep = analysis === 'deep';
   const root = path.resolve(input);
   const rootStat = await lstat(root);
-  if (rootStat.isSymbolicLink() || (!rootStat.isFile() && !rootStat.isDirectory())) throw new Error('Mục tiêu phải là file/thư mục thường, không phải symlink.');
+  if (rootStat.isSymbolicLink() || (!rootStat.isFile() && !rootStat.isDirectory())) throw new Error('The target must be a normal file/ directory, not a symlink.');
   const base = rootStat.isDirectory() ? root : path.dirname(root);
   const report = createReport('source', root);
   const maxFiles = options.maxFiles ?? MAX_SOURCE_FILES;
@@ -118,9 +118,9 @@ export async function scanSource(input, options = {}) {
   const sources = [];
   let deepBytes = 0;
   if (deep) {
-    if (customRules.length) throw new Error('Rule JSON bổ sung chỉ dùng với quét nhanh.');
+    if (customRules.length) throw new Error('Custom JSON rules are available in Quick Scan.');
     report.stats.ruleCount = SEMGREP_RULE_COUNT;
-    report.limitations[1] = 'Semgrep CE theo dõi dữ liệu trong từng hàm và so khớp các mẫu mã nguồn hoặc cấu hình đã khai báo. Cần kiểm chứng ngữ cảnh của vị trí được báo.';
+    report.limitations[1] = 'Semgrep CE traces data within functions and matches source and configuration patterns. Review each location in context.';
   }
   if (useGitignore) report.stats.gitignore = { applied: true, ignored: 0 };
   if (onlyFiles) report.stats.diff = { ...(options.diffInfo ?? {}), changedFiles: onlyFiles.size, unchanged: 0 };
@@ -131,7 +131,7 @@ export async function scanSource(input, options = {}) {
     const relative = path.relative(base, absolute).split(path.sep).join('/');
     let stat;
     try { stat = await lstat(absolute); }
-    catch { report.errors.push(`Không đọc được metadata: ${relative}`); return; }
+    catch { report.errors.push(`Can't read metadata: ${relative}`); return; }
     if (stat.isSymbolicLink()) { report.stats.filesSkipped++; return; }
     if (stat.isDirectory()) {
       if (!options.includeTests && relative && isTestPath(relative + '/')) { report.stats.filesSkipped++; return; }
@@ -139,14 +139,14 @@ export async function scanSource(input, options = {}) {
       if (absolute !== root && useGitignore && isIgnored(ignoreStack, relative, true)) { report.stats.gitignore.ignored++; return; }
       let children;
       try { children = await readdir(absolute); }
-      catch { report.errors.push(`Không đọc được thư mục: ${relative}`); return; }
+      catch { report.errors.push(`Could not list directory: ${relative}`); return; }
       let stack = ignoreStack;
       if (useGitignore && children.includes('.gitignore')) {
         try {
           const ignoreFile = path.join(absolute, '.gitignore');
           const ignoreStat = await lstat(ignoreFile);
           if (ignoreStat.isFile() && ignoreStat.size <= maxFileBytes) stack = [...ignoreStack, parseGitignore(await readFile(ignoreFile, 'utf8'), absolute === base ? '' : relative)];
-        } catch { report.errors.push(`Không đọc được .gitignore: ${relative || '.'}`); }
+        } catch { report.errors.push(`Can't read .gitignore: ${relative || '.'}`); }
       }
       for (const child of children.sort()) await visit(path.join(absolute, child), stack);
       return;
@@ -165,19 +165,19 @@ export async function scanSource(input, options = {}) {
     const manifest = isDependencyManifest(name);
     const supported = deep ? language || manifest : isSupportedSourceFile(absolute);
     if (!supported) { report.stats.filesSkipped++; return; }
-    if (report.stats.filesScanned >= maxFiles) { limitReached = true; report.errors.push(`Đã chạm giới hạn ${maxFiles} file; còn dữ liệu chưa kiểm tra.`); return; }
-    if (stat.size > maxFileBytes) { report.stats.filesSkipped++; report.errors.push(`File vượt giới hạn ${maxFileBytes} byte: ${relative}`); return; }
+    if (report.stats.filesScanned >= maxFiles) { limitReached = true; report.errors.push(`The ${maxFiles}-file limit was reached. Some source was skipped.`); return; }
+    if (stat.size > maxFileBytes) { report.stats.filesSkipped++; report.errors.push(`File exceeds the ${maxFileBytes}-byte limit: ${relative}`); return; }
     let buffer;
     try { buffer = await readFile(absolute); }
-    catch { report.errors.push(`Không đọc được file: ${relative}`); return; }
+    catch { report.errors.push(`Could not read file: ${relative}`); return; }
     if (buffer.includes(0)) { report.stats.filesSkipped++; return; }
     if (buffer.length > maxFileBytes) {
       report.stats.filesSkipped++;
-      report.errors.push(`File vượt giới hạn ${maxFileBytes} byte: ${relative}`);
+      report.errors.push(`File exceeds the ${maxFileBytes}-byte limit: ${relative}`);
       return;
     }
     if (language && deepBytes + buffer.length > MAX_SOURCE_TOTAL_BYTES) {
-      report.errors.push(`Đã chạm giới hạn ${MAX_SOURCE_TOTAL_BYTES / MIB} MiB mã nguồn cho Semgrep; còn file chưa phân tích.`);
+      report.errors.push(`Semgrep source exceeds the ${MAX_SOURCE_TOTAL_BYTES / MIB} MiB total limit. Some files were skipped.`);
       limitReached = true;
       return;
     }
@@ -200,7 +200,7 @@ export async function scanSource(input, options = {}) {
         stats.unassessedRanges += dependencies.unassessedRanges;
         report.findings.push(...dependencies.findings);
         if (!inventory.unresolved && !inventory.unsupported && !dependencies.unassessedRanges) dependencyFiles.add(relative);
-      } catch { report.errors.push('Không đọc được dependency manifest hoặc cấu trúc không hợp lệ: ' + relative); }
+      } catch { report.errors.push('Could not read dependency manifest or invalid structure: ' + relative); }
     }
     if (deep) {
       if (language) {
@@ -219,7 +219,7 @@ export async function scanSource(input, options = {}) {
     for (let index = 0; index < lines.length; index++) {
       const raw = lines[index];
       if (raw.length > 8192) {
-        report.errors.push(`Dòng vượt giới hạn 8192 ký tự, chưa phân tích: ${relative}:${index + 1}`);
+        report.errors.push(`Line exceeds the 8192-character analysis limit: ${relative}:${index + 1}`);
         continue;
       }
       const line = raw.trim();
@@ -273,12 +273,12 @@ export async function scanSource(input, options = {}) {
           confidence: placeholder ? 'low' : rule.id === 'SRC-PRIVATE-KEY' ? 'high' : 'medium', status: 'needs-review', cwe: `CWE-${rule.cwe}`,
           ...(placeholder ? { context: 'placeholder' } : {}),
           location: { file: relative, line: index + 1 }, evidence: evidence(raw, rule.secret),
-          impact: rule.impact, remediation: rule.fix, reference: rule.reference || ref(rule.cwe), detection: { method: 'signature', condition: rule.condition || 'Cần xác minh đầu vào, biện pháp bảo vệ và môi trường trước khi kết luận.', asvs: rule.asvs || [] }
+          impact: rule.impact, remediation: rule.fix, reference: rule.reference || ref(rule.cwe), detection: { method: 'signature', condition: rule.condition || 'You need to verify input, protection, and environment before concluding.', asvs: rule.asvs || [] }
         });
       }
       if (report.findings.length >= maxFindings) {
         report.findings.length = maxFindings;
-        report.errors.push(`Đã chạm giới hạn ${maxFindings} phát hiện; dừng để giới hạn bộ nhớ.`);
+        report.errors.push(`Scan stopped after ${maxFindings} findings to limit memory usage.`);
         limitReached = true;
         break;
       }
@@ -286,7 +286,7 @@ export async function scanSource(input, options = {}) {
     if (!limitReached && ['.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '.py', '.php'].includes(ext)) report.findings.push(...analyzeFlow(lines, relative));
     if (report.findings.length > maxFindings) {
       report.findings.length = maxFindings; limitReached = true;
-      report.errors.push(`Đã chạm giới hạn ${maxFindings} phát hiện; còn phần chưa đánh giá.`);
+      report.errors.push(`The ${maxFindings}-finding limit was reached. Some source was skipped.`);
     }
   }
   await visit(root);
@@ -305,8 +305,8 @@ export async function scanSource(input, options = {}) {
       ...(result.pythonPrecision ? { pythonPrecision: result.pythonPrecision } : {}),
     };
     if (result.message) report.errors.push(result.message);
-    if (!sources.length && !onlyFiles && !report.stats.dependencyAnalysis.manifests) report.errors.push('Không có file thuộc ngôn ngữ được hỗ trợ để phân tích sâu.');
-    if (total > maxFindings) report.errors.push('Đã chạm giới hạn ' + maxFindings + ' phát hiện; còn kết quả chưa hiển thị.');
+    if (!sources.length && !onlyFiles && !report.stats.dependencyAnalysis.manifests) report.errors.push('No files in languages supported by Deep Scan were selected.');
+    if (total > maxFindings) report.errors.push('Showing the first ' + maxFindings + ' findings.');
   } else {
     report.findings = groupFlowFindings(report.findings);
     if (options.astFilter !== false) {
@@ -316,7 +316,7 @@ export async function scanSource(input, options = {}) {
       report.filtered = filtered.removed;
       report.stats.astFilter = filtered.stats;
     }
-    if (!report.stats.filesScanned && !onlyFiles) report.errors.push('Không có file văn bản thuộc định dạng được hỗ trợ để phân tích.');
+    if (!report.stats.filesScanned && !onlyFiles) report.errors.push('No supported source files were selected.');
   }
   if (options.contextFilter !== false) {
     const downgraded = applyFileContext(report.findings);

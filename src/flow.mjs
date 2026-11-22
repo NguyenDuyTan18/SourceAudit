@@ -1,10 +1,10 @@
 const flowRules = [
-  ['FLOW-SQL', 89, /(?:\bdb\.query|\bcursor\.execute|\.executeQuery)\s*\(/, 'Truy vấn nhận biến có nguồn từ request'],
-  ['FLOW-EVAL', 95, /\beval\s*\(/, 'Code động nhận biến có nguồn từ request'],
-  ['FLOW-SHELL', 78, /(?:\bexec|\bexecSync|\bos\.system|\bshell_exec|\bos\.popen)\s*\(/, 'Lệnh hệ thống nhận biến có nguồn từ request'],
-  ['FLOW-SSRF', 918, /(?:\bfetch|\brequests\.get|\baxios\.get)\s*\(/, 'HTTP client nhận biến có nguồn từ request'],
-  ['FLOW-PATH', 22, /(?:\breadFile|\breadFileSync|\bsendFile|\bfile_get_contents)\s*\(/, 'API file nhận biến có nguồn từ request'],
-  ['FLOW-REDIRECT', 601, /(?:\bres\.redirect|\bHttpResponseRedirect)\s*\(/, 'Redirect nhận biến có nguồn từ request']
+  ['FLOW-SQL', 89, /(?:\bdb\.query|\bcursor\.execute|\.executeQuery)\s*\(/, 'A SQL query variable originates in the request'],
+  ['FLOW-EVAL', 95, /\beval\s*\(/, 'Evaluated code may originate in the request'],
+  ['FLOW-SHELL', 78, /(?:\bexec|\bexecSync|\bos\.system|\bshell_exec|\bos\.popen)\s*\(/, 'A system command variable originates in the request'],
+  ['FLOW-SSRF', 918, /(?:\bfetch|\brequests\.get|\baxios\.get)\s*\(/, 'An HTTP client receives a variable from the request'],
+  ['FLOW-PATH', 22, /(?:\breadFile|\breadFileSync|\bsendFile|\bfile_get_contents)\s*\(/, 'A file API receives a variable from the request'],
+  ['FLOW-REDIRECT', 601, /(?:\bres\.redirect|\bHttpResponseRedirect)\s*\(/, 'A redirect destination originates in the request']
 ];
 export const FLOW_RULES = flowRules.map(([id, cwe, , title]) => ({ id, cwe: `CWE-${cwe}`, title, severity: 'medium' }));
 const words = (value) => value.replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g, '').match(/\$?[A-Za-z_][A-Za-z0-9_]*/g) || [];
@@ -46,8 +46,8 @@ export function analyzeFlow(lines, file) {
       if (!record || record.trace.some((step) => step.line === i + 1)) continue;
       findings.push({ ruleId: id, cwe: `CWE-${cwe}`, title, severity: 'medium', confidence: 'low', status: 'needs-review', location: { file, line: i + 1 },
         evidence: stringsRemoved(raw).trim().slice(0, 300), trace: [...record.trace, { file, line: i + 1, role: 'sink', evidence: stringsRemoved(raw).trim().slice(0, 300) }],
-        impact: 'Theo dõi văn bản cục bộ cho thấy biến có nguồn từ request đi tới API nhạy cảm trong tối đa 12 dòng. Chưa phân tích AST, scope hoặc sanitizer đầy đủ; có thể báo nhầm.',
-        remediation: 'Kiểm chứng luồng dữ liệu và biện pháp bảo vệ ở các dòng được đánh dấu; dùng API tham số hóa, allowlist hoặc encoding đúng ngữ cảnh.', reference: `https://cwe.mitre.org/data/definitions/${cwe}.html` });
+        impact: 'A local text-based check connects request data to a sensitive API within 12 lines. Review aliasing, sanitizers and other control flow before acting.',
+        remediation: 'Verify the marked data flow and apply parameter binding, allowlists or context-specific encoding where appropriate.', reference: `https://cwe.mitre.org/data/definitions/${cwe}.html` });
     }
   }
   return findings;

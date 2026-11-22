@@ -1,7 +1,7 @@
-# Mẫu workflow: chép vào .github/workflows/srcaudit.yml của repo cần quét.
-# - Pull request: chỉ quét file thay đổi so với nhánh đích (--diff).
-# - Push lên nhánh mặc định: quét toàn bộ repo.
-# Kết quả SARIF hiện trong tab Security → Code scanning và chú thích trực tiếp trên PR.
+# Copy this workflow to .github/workflows/srcaudit.yml in the repository you want to scan.
+# - Pull request: Scan files changed relative to the target branch (--diff).
+# - Push to the default branch: scan the full repository.
+# GitHub displays SARIF results under Security → Code scanning and as pull request annotations.
 name: SrcAudit
 
 on:
@@ -11,7 +11,7 @@ on:
 
 permissions:
   contents: read
-  security-events: write # cần cho upload-sarif
+  security-events: write # Required by upload-sarif
 
 jobs:
   srcaudit:
@@ -19,18 +19,18 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
-          fetch-depth: 0 # --diff cần lịch sử để tính merge-base
+          fetch-depth: 0 # --diff needs the Git history to calculate the merge base
           persist-credentials: false
 
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           repository: NguyenDuyTan18/SourceAudit
-          # Chọn commit SrcAudit đã kiểm tra trước khi đưa mẫu này vào CI.
-          # ref: <commit của SrcAudit>
+          # Pin a reviewed SrcAudit commit before running this workflow in CI.
+          # ref: <SrcAudit commit SHA>
           path: .srcaudit-tool
           persist-credentials: false
 
-      # Chuyển công cụ ra ngoài workspace để không quét chính mã mẫu của SrcAudit.
+      # Move the scanner outside the workspace so the scan excludes SrcAudit's own examples.
       - run: mv .srcaudit-tool "$RUNNER_TEMP/srcaudit"
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
@@ -40,7 +40,7 @@ jobs:
       - run: npm ci --ignore-scripts
         working-directory: ${{ runner.temp }}/srcaudit
 
-      - name: Quét mã nguồn
+      - name: Scan source code
         id: scan
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -48,13 +48,13 @@ jobs:
         run: |
           args=(--src . --out "$RUNNER_TEMP/srcaudit-report" --fail-on high)
           if [ "$EVENT_NAME" = "pull_request" ]; then args+=(--diff "origin/$BASE_REF"); fi
-          # Tùy chọn: thêm --baseline đường/dẫn/report.json để chỉ báo phát hiện mới.
+          # Optional: add --baseline path/to/report.json to report new findings only.
           status=0
           node "$RUNNER_TEMP/srcaudit/scan.mjs" "${args[@]}" || status=$?
           if [ -s "$RUNNER_TEMP/srcaudit-report/report.sarif" ]; then echo 'sarif_ready=true' >> "$GITHUB_OUTPUT"; fi
           exit "$status"
 
-      - name: Tải SARIF lên GitHub code scanning
+      - name: Upload SARIF to GitHub Code Scanning
         if: ${{ !cancelled() && steps.scan.outputs.sarif_ready == 'true' }}
         uses: github/codeql-action/upload-sarif@800a1d8701a65d150a672fef0923dbf2660a62ec # v4
         with:

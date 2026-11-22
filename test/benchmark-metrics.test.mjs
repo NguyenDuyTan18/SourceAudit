@@ -10,7 +10,7 @@ test('expected results parser accepts OWASP format and rejects malformed rows', 
     { name: 'BenchmarkTest00001', category: 'sqli', real: true, cwe: 'CWE-89' },
     { name: 'BenchmarkTest00002', category: 'hash', real: false, cwe: 'CWE-328' },
   ]);
-  assert.throws(() => parseExpectedResults('a b,sqli,maybe,89'), /không hợp lệ/);
+  assert.throws(() => parseExpectedResults('a b,sqli,maybe,89'), /Invalid expected-results row/);
 });
 
 test('labeled scoring computes confusion matrix, Youden score, aliases and per-rule precision', () => {
@@ -40,5 +40,5 @@ test('pair, clean scoring and regression check', () => {
   assert.deepEqual(regressions({ 'x:quick': { overall: { score: 0.6, tpr: 0.6, fpr: 0.05 }, categories: { sqli: { score: 0.45 } } }, 'c:quick': { overall: { perKloc: 0.2, actionablePerKloc: 0.1 } } }, baseline), []);
   const problems = regressions({ 'x:quick': { overall: { score: 0.3, tpr: 0.5, fpr: 0.3 }, categories: { sqli: { score: 0.1 } } } }, baseline);
   assert.equal(problems.length, 4);
-  assert.match(problems.join('\n'), /c:quick: thiếu kết quả/);
+  assert.match(problems.join('\n'), /c:quick: Missing results/);
 });

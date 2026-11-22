@@ -23,18 +23,18 @@ if ($taskActiveSession) {
     if ($taskWantsRemote -and (Test-Path -LiteralPath $taskPublicFile)) { $taskBackendFiles += Get-Item -LiteralPath $taskPublicFile }
     $taskLatestBackend = ($taskBackendFiles | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1).LastWriteTimeUtc
     $taskActiveProcess = Get-Process -Id ([int]$taskActiveSession.pid) -ErrorAction SilentlyContinue
-    if (-not $taskActiveProcess -or $taskActiveProcess.ProcessName -ne 'node') { throw 'Khong xac dinh duoc tien trinh SrcAudit. Hay dong ban dang chay roi mo lai.' }
+    if (-not $taskActiveProcess -or $taskActiveProcess.ProcessName -ne 'node') { throw 'Could not identify the SrcAudit process. Close the running instance and start it again.' }
     if ($taskLatestBackend -gt $taskActiveProcess.StartTime.ToUniversalTime() -or $taskWantsRemote -ne [bool]$taskActiveSession.publicUrl) {
         $taskListener = [regex]::Escape(([uri]$taskActiveSession.url).Authority)
         $taskListenerPattern = '^\s*TCP\s+' + $taskListener + '\s+0\.0\.0\.0:0\s+\S+\s+' + $taskActiveProcess.Id + '\s*$'
         $taskOwnsListener = netstat.exe -ano -p tcp | Select-String -Pattern $taskListenerPattern -Quiet
         if (-not $taskOwnsListener -or (Get-Item -LiteralPath $taskSessionFile).LastWriteTimeUtc -lt $taskActiveProcess.StartTime.ToUniversalTime()) {
-            throw 'Khong xac minh duoc tien trinh SrcAudit cu. Hay dong ban dang chay roi mo lai.'
+            throw 'Could not verify the existing SrcAudit process. Close the running instance and start it again.'
         }
-        Write-Host 'Dang khoi dong lai SrcAudit de nap ban moi...'
+        Write-Host 'Restarting SrcAudit to load the latest changes...'
         Stop-Process -InputObject $taskActiveProcess
         $taskActiveProcess.WaitForExit(5000) | Out-Null
-        if (-not $taskActiveProcess.HasExited) { throw 'Khong dung duoc tien trinh SrcAudit cu.' }
+        if (-not $taskActiveProcess.HasExited) { throw 'Could not stop the existing SrcAudit process.' }
         $taskActiveSession = $null
     }
 }
@@ -47,6 +47,6 @@ if (-not $taskActiveSession) {
         if ($taskActiveSession) { break }
     }
 }
-if (-not $taskActiveSession) { throw 'Khong khoi dong duoc UI. Xem ui-error.log hoac chay node ui.mjs.' }
+if (-not $taskActiveSession) { throw 'Could not start the web interface. See ui-error.log or run node ui.mjs.' }
 if ($NoBrowser) { Write-Output $taskActiveSession.url }
 else { Start-Process -FilePath $taskActiveSession.url }

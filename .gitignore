@@ -7,4 +7,5 @@ node_modules/
 ui.log
 ui-error.log
 knowledge-local/
+/.env
 *.zip

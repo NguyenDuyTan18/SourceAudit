@@ -49,7 +49,7 @@ test('owner registers locally, signs out, and signs back in after restart', asyn
   t.after(async () => { await ui.close(); await rm(rootDir, { recursive: true, force: true }); });
 
   const entry = await ui.request('/', { headers: { Accept: 'text/html' } });
-  assert.match(await entry.text(), /Đăng ký/);
+  assert.match(await entry.text(), /Create owner account/);
   assert.equal((await ui.request('/api/health')).status, 200);
   assert.equal((await ui.request('/api/bootstrap')).status, 401);
   const csrf = await formToken(ui, '/register');
@@ -71,7 +71,7 @@ test('owner registers locally, signs out, and signs back in after restart', asyn
 
   const html = await (await ui.request('/', { headers: { Cookie: cookie } })).text();
   const sessionToken = html.match(/name="session-token" content="([a-f0-9]+)"/)[1];
-  assert.match(html, /Đăng xuất/);
+  assert.match(html, /Sign out/);
   const sessionHeaders = { Cookie: cookie, 'X-Session-Token': sessionToken };
   assert.equal((await ui.request('/api/bootstrap', { headers: sessionHeaders })).status, 200);
   assert.equal((await ui.request('/api/logout', { method: 'POST', headers: sessionHeaders })).status, 403);
@@ -86,7 +86,7 @@ test('owner registers locally, signs out, and signs back in after restart', asyn
   assert.equal((await submit(ui, '/login', { csrf: nextCsrf, username: 'owner', password: 'incorrect' })).status, 401);
   const login = await submit(ui, '/login', { csrf: nextCsrf, username: 'OWNER', password });
   assert.equal(login.status, 303);
-  assert.match(await (await ui.request('/', { headers: { Cookie: cookieOf(login) } })).text(), /Kiểm tra bảo mật/);
+  assert.match(await (await ui.request('/', { headers: { Cookie: cookieOf(login) } })).text(), /Security scan/);
 });
 
 test('public origin can sign in with the owner account but cannot register through the proxy', async (t) => {
@@ -106,7 +106,7 @@ test('public origin can sign in with the owner account but cannot register throu
   const login = await submit(ui, '/login', { csrf: publicCsrf, username: 'owner', password }, proxy);
   assert.equal(login.status, 303);
   assert.match(login.headers.get('set-cookie'), /; Secure/);
-  assert.match(await (await ui.request('/', { headers: { ...proxy, Cookie: cookieOf(login) } })).text(), /Kiểm tra bảo mật/);
+  assert.match(await (await ui.request('/', { headers: { ...proxy, Cookie: cookieOf(login) } })).text(), /Security scan/);
   assert.equal((await ui.request('/', { headers: { Cookie: cookieOf(login) } })).status, 401);
 });
 

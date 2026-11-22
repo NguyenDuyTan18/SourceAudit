@@ -9,41 +9,39 @@ import { renderText, writeReports, SEVERITIES } from './src/report.mjs';
 import { pruneReports, resolveRetentionMs } from './src/report-retention.mjs';
 import { searchKnowledge, importWriteup, loadCustomRules, loadWriteups, enrichReport } from './src/knowledge.mjs';
 
-const HELP = `SrcAudit — Phân tích tĩnh mã nguồn (Node.js >= 22).
+const HELP = `SrcAudit — Static source code analysis (Node.js >= 22).
 
-Quét và xuất report.txt, report.json, report.html:
+Scan and export HTML, JSON, text and SARIF reports:
   node scan.mjs --src "D:\\path\\to\\source" --out ./reports/run-2
   node scan.mjs --src ./app --deep
   node scan.mjs "D:\\path\\to\\source"
 
-Tra cứu và bổ sung input:
+Find rules and add review references:
   node scan.mjs --list-rules
   node scan.mjs --knowledge sqli
   node scan.mjs --import-writeup ./notes.md --knowledge-dir ./knowledge-local
   node scan.mjs --src ./app --rules ./examples/custom-rules.json --knowledge-dir ./knowledge-local
 
-Tùy chọn:
-  --max-bytes N       Giới hạn mỗi file, mặc định ${MAX_SOURCE_FILE_BYTES / MIB} MiB (100..${MAX_SOURCE_FILE_BYTES} byte)
-  --max-files N       Giới hạn file source, mặc định 2000, tối đa 20000
-  --deep              Phân tích luồng bằng Semgrep: JS/TS, Python, PHP, Java, Go và C#
-  --fail-on LEVEL    Exit 1 khi có severity >= critical/high/medium/low/info
-  --out DIR          Thư mục báo cáo (mặc định .scanner-reports/<timestamp>)
-  --baseline FILE    Ẩn phát hiện đã có trong report.json trước đó; chỉ báo phát hiện mới
-  --diff REF         Chỉ quét file thay đổi so với merge-base của REF và HEAD (cần git)
-  --no-gitignore     Quét cả file bị .gitignore loại trừ (mặc định tôn trọng .gitignore)
-  --include-tests    Quét cả file kiểm thử (mặc định bỏ qua)
+Options:
+  --max-bytes N    Per-file limit, default ${MAX_SOURCE_FILE_BYTES / MIB} MiB (100..${MAX_SOURCE_FILE_BYTES} bytes)
+  --max-files N    Source file limit, default 2000, maximum 20000
+  --deep           Run Semgrep CE analysis
+  --fail-on LEVEL  Exit 1 at or above critical, high, medium, low or info
+  --out DIR        Report directory (default: .scanner-reports/<timestamp> under the data directory)
+  --baseline FILE  Show new findings relative to an earlier report.json
+  --diff REF       Scan files changed since the Git merge base of REF and HEAD
+  --no-gitignore   Include files excluded by .gitignore
+  --include-tests  Include test files and directories
+  --help           Show this help
 
-Bỏ qua một phát hiện ngay trong mã (bắt buộc có lý do sau "--"):
-  db.query(sql); // srcaudit-ignore SRC-SQL -- sql là hằng số nội bộ
+Suppress a finding with an inline rule ID and reason:
+  db.query(sql); // srcaudit-ignore SRC-SQL -- SQL is a fixed internal query
 
-Báo cáo trong .scanner-reports/ cũ hơn SRCAUDIT_REPORT_RETENTION_DAYS ngày
-(mặc định 7, đặt 0 để tắt) được tự xóa khi dùng thư mục mặc định.
-  --help             Hướng dẫn
+For the default report directory, SRCAUDIT_REPORT_RETENTION_DAYS controls retention
+(seven days by default, zero disables cleanup).
 
-Exit 0: hoàn tất (vẫn có thể có phát hiện); 1: đạt ngưỡng --fail-on;
-Exit 2: input lỗi hoặc phạm vi kiểm tra không hoàn tất.
-Chỉ kiểm tra hệ thống thuộc quyền sở hữu hoặc được phép kiểm thử.
-Quét nhanh dò mẫu mã nguồn. Quét sâu dùng Semgrep CE.
+Exit 0: scan completed. Exit 1: a finding met --fail-on. Exit 2: invalid input or incomplete scan.
+Scan only code you own or are authorized to review.
 `;
 
 function parseArgs(args) {
@@ -53,35 +51,35 @@ function parseArgs(args) {
   let positional;
   for (let i = 0; i < args.length; i++) {
     if (!args[i].startsWith('--')) {
-      if (positional) throw new Error('Chỉ nhận một mục tiêu mỗi lần.');
+      if (positional) throw new Error('Provide only one source path.');
       positional = args[i]; continue;
     }
     const key = args[i].slice(2);
-    if (Object.hasOwn(options, key)) throw new Error(`Tùy chọn lặp: --${key}`);
+    if (Object.hasOwn(options, key)) throw new Error(`Duplicate option: --${key}`);
     if (flags.has(key)) options[key] = true;
     else if (values.has(key)) {
       const value = args[++i];
-      if (!value || value.startsWith('--')) throw new Error(`Thiếu giá trị --${key}`);
+      if (!value || value.startsWith('--')) throw new Error(`Missing value for --${key}.`);
       options[key] = value;
-    } else throw new Error(`Tùy chọn không hỗ trợ: --${key}`);
+    } else throw new Error(`Unknown option: --${key}`);
   }
   if (positional) {
-    if (options.src) throw new Error('Không kết hợp mục tiêu vị trí với --src.');
+    if (options.src) throw new Error('Provide the source path either as a positional argument or with --src.');
     options.src = positional;
   }
-  if (options.src && /^[a-z][a-z\d+.-]+:\/\//i.test(options.src.trim())) throw new Error('--src nhận đường dẫn mã nguồn trên máy.');
+  if (options.src && /^[a-z][a-z\d+.-]+:\/\//i.test(options.src.trim())) throw new Error('--src requires a local path.');
   const numeric = { 'max-bytes': [100, MAX_SOURCE_FILE_BYTES], 'max-files': [1, 20000] };
   for (const [key, [min, max]] of Object.entries(numeric)) {
     if (options[key] !== undefined) {
       const value = Number(options[key]);
-      if (!Number.isInteger(value) || value < min || value > max) throw new Error(`--${key} phải là số nguyên ${min}..${max}.`);
+      if (!Number.isInteger(value) || value < min || value > max) throw new Error(`--${key} must be the integer ${min}..${max}.`);
       options[key] = value;
     }
   }
-  if (options['fail-on'] && !SEVERITIES.includes(options['fail-on'])) throw new Error('--fail-on không hợp lệ.');
-  if (!options.help && ['src', 'knowledge', 'list-rules', 'import-writeup'].filter((key) => options[key] !== undefined).length !== 1) throw new Error('Chọn đúng một thao tác: --src, --knowledge, --list-rules, --import-writeup.');
-  if (options.deep && (!options.src || options.rules)) throw new Error('--deep cần --src và chỉ dùng các rule Semgrep tích hợp.');
-  if ((options.baseline || options.diff || options['no-gitignore'] || options['include-tests']) && !options.src) throw new Error('--baseline, --diff, --no-gitignore và --include-tests cần --src.');
+  if (options['fail-on'] && !SEVERITIES.includes(options['fail-on'])) throw new Error('Invalid severity for --fail-on.');
+  if (!options.help && ['src', 'knowledge', 'list-rules', 'import-writeup'].filter((key) => options[key] !== undefined).length !== 1) throw new Error('Select one operation: --src, --knowledge, --list-rules or --import-writeup.');
+  if (options.deep && (!options.src || options.rules)) throw new Error('--deep requires --src and uses the bundled Semgrep rules.');
+  if ((options.baseline || options.diff || options['no-gitignore'] || options['include-tests']) && !options.src) throw new Error('--baseline, --diff, --no-gitignore and --include-tests require --src.');
   return options;
 }
 
@@ -90,23 +88,26 @@ async function main() {
   if (options.help) { console.log(HELP); return; }
   if (options['list-rules']) { console.log(JSON.stringify({ source: SOURCE_RULES }, null, 2)); return; }
   if (options.knowledge !== undefined) { console.log(JSON.stringify(searchKnowledge(options.knowledge), null, 2)); return; }
-  const knowledgeDir = options['knowledge-dir'] ? path.resolve(options['knowledge-dir']) : undefined;
+  const dataRoot = process.env.SRCAUDIT_DATA_DIR || '.';
+  const knowledgeDir = options['knowledge-dir'] ? path.resolve(options['knowledge-dir'])
+    : process.env.SRCAUDIT_DATA_DIR ? path.resolve(dataRoot, 'knowledge-local') : undefined;
   if (options['import-writeup']) { console.log(JSON.stringify(await importWriteup(options['import-writeup'], knowledgeDir ?? 'knowledge-local'), null, 2)); return; }
-  if (options.rules && !options.src) throw new Error('--rules hiện chỉ áp dụng cho source.');
-  const outDir = path.resolve(options.out ?? path.join('.scanner-reports', new Date().toISOString().replace(/[:.]/g, '-')));
+  if (options.rules && !options.src) throw new Error('--rules requires --src.');
+  const reportsDir = path.resolve(dataRoot, '.scanner-reports');
+  const outDir = path.resolve(options.out ?? path.join(reportsDir, new Date().toISOString().replace(/[:.]/g, '-')));
   const customRules = options.rules ? await loadCustomRules(options.rules) : [];
-  const writeups = await loadWriteups(knowledgeDir);
+  const writeups = await loadWriteups(knowledgeDir, { allowMissing: !options['knowledge-dir'] });
   let baseline;
   if (options.baseline) {
     try { baseline = JSON.parse(await readFile(path.resolve(options.baseline), 'utf8')); } catch { baseline = undefined; }
     if (!Array.isArray(baseline?.findings) || (baseline.findings.length && !baseline.findings.some((f) => typeof f?.fingerprint === 'string'))) {
-      console.error('Lỗi: --baseline phải là report.json do SrcAudit phiên bản này tạo ra (có trường fingerprint).');
+      console.error('Error: --baseline requires a SrcAudit report.json with finding fingerprints.');
       process.exitCode = 2; return;
     }
   }
   let diff;
   try { diff = options.diff ? await changedFiles(options.src, options.diff) : undefined; }
-  catch (error) { if (error instanceof DiffError) { console.error('Lỗi: ' + error.message); process.exitCode = 2; return; } throw error; }
+  catch (error) { if (error instanceof DiffError) { console.error('Error: ' + error.message); process.exitCode = 2; return; } throw error; }
   const report = await scanSource(options.src, {
     analysis: options.deep ? 'deep' : 'quick', maxFiles: options['max-files'], maxFileBytes: options['max-bytes'],
     customRules, excludePaths: [outDir, ...(knowledgeDir ? [knowledgeDir] : [])],
@@ -116,16 +117,16 @@ async function main() {
   });
   if (baseline) applyBaseline(report, baseline, path.basename(options.baseline));
   enrichReport(report, writeups);
-  if (!options.out) await pruneReports(path.resolve('.scanner-reports'), { maxAgeMs: resolveRetentionMs() });
+  if (!options.out) await pruneReports(reportsDir, { maxAgeMs: resolveRetentionMs() });
   const files = await writeReports(report, outDir);
   console.log(renderText(report));
-  console.log(`\nBáo cáo HTML: ${files.html}\nBáo cáo JSON: ${files.json}\nBáo cáo TXT: ${files.text}\nBáo cáo SARIF: ${files.sarif}`);
+  console.log(`\nHTML report: ${files.html}\nJSON report: ${files.json}\nText report: ${files.text}\nSARIF report: ${files.sarif}`);
   if (report.status !== 'complete') process.exitCode = 2;
   else if (options['fail-on'] && report.findings.some((f) => SEVERITIES.indexOf(f.severity) <= SEVERITIES.indexOf(options['fail-on']))) process.exitCode = 1;
 }
 
 main().catch(() => {
   // Filesystem errors can contain sensitive paths.
-  console.error('Lỗi: input/tùy chọn không hợp lệ hoặc không đọc/ghi được dữ liệu. Chạy node scan.mjs --help; kiểm tra đường dẫn, quyền và giới hạn tùy chọn.');
+  console.error('Error: Could not complete the operation. Check paths, permissions and options. Run node scan.mjs --help for usage.');
   process.exitCode = 2;
 });

@@ -30,10 +30,10 @@ test('source groups SQL construction with its sink and keeps distinct calls sepa
   for (const finding of sql) {
     assert.deepEqual(finding.trace.map(({ line }) => line), [2, 3, finding.location.line]);
     assert.ok(finding.relatedRuleIds.includes('SRC-SQL'));
-    assert.match(finding.remediation, /tham số/i);
+    assert.match(finding.remediation, /parameterized/i);
   }
-  assert.match(renderText(report), /Dòng liên quan[\s\S]*route\.js:3/);
-  assert.match(renderHtml(report), /Cách khắc phục[\s\S]*Dòng liên quan/);
+  assert.match(renderText(report), /Data-flow trace[\s\S]*route\.js:3/);
+  assert.match(renderHtml(report), /Remediation[\s\S]*Data-flow trace/);
 });
 
 test('source identifies risky sinks with file, line and remediation; never copies credentials', async (t) => {

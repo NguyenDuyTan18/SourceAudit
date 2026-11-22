@@ -1,35 +1,65 @@
 import { createUiServer } from './src/ui-server.mjs';
-import { access, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
-const root = fileURLToPath(new URL('./', import.meta.url));
-const accountFile = path.join(root, '.scanner-auth', 'owner.json');
+const sourceDir = fileURLToPath(new URL('./', import.meta.url));
+const rootDir = path.resolve(process.env.SRCAUDIT_DATA_DIR || sourceDir);
+const accountFile = path.join(rootDir, '.scanner-auth', 'owner.json');
+const inContainer = process.env.SRCAUDIT_CONTAINER === '1';
 const remoteEnabled = process.env.SRCAUDIT_ENABLE_REMOTE === '1';
-let publicAccess;
-if (remoteEnabled) {
-  try { publicAccess = JSON.parse(await readFile(path.join(root, '.ui-public.json'), 'utf8')); }
-  catch { console.error('Không đọc được cấu hình public .ui-public.json.'); process.exit(1); }
+const internalPort = 8787;
+const bindHost = inContainer ? '0.0.0.0' : '127.0.0.1';
+
+async function containerGateway() {
+  const routes = await readFile('/proc/net/route', 'utf8');
+  for (const line of routes.split('\n').slice(1)) {
+    const [, destination, gateway, flags] = line.trim().split(/\s+/);
+    if (destination === '00000000' && /^[0-9A-F]{8}$/i.test(gateway) && (Number.parseInt(flags, 16) & 3) === 3) {
+      return [...Buffer.from(gateway, 'hex')].reverse().join('.');
+    }
+  }
+  throw new Error('No IPv4 container gateway found. Start SrcAudit on a Docker bridge network.');
 }
-let server;
+
+let server, publicAccess, containerAccess;
 try {
+  if (inContainer && remoteEnabled) throw new Error('Container mode supports local access only.');
+  if (inContainer) containerAccess = {
+    port: Number(process.env.SRCAUDIT_PORT ?? internalPort), gateway: await containerGateway(),
+  };
+  if (remoteEnabled) publicAccess = JSON.parse(await readFile(path.join(rootDir, '.ui-public.json'), 'utf8'));
   const localOwnerWorkspace = !remoteEnabled && await access(accountFile).then(() => true, (error) => {
     if (error.code !== 'ENOENT') throw error;
     return false;
   });
-  server = createUiServer({ rootDir: root, publicAccess, accountFile: remoteEnabled ? accountFile : undefined, localOwnerWorkspace });
-} catch {
-  console.error('Cấu hình giao diện không hợp lệ. Kiểm tra origin HTTPS và thông tin đăng nhập public nếu có.');
+  await mkdir(rootDir, { recursive: true });
+  server = createUiServer({ rootDir, publicAccess, accountFile: remoteEnabled ? accountFile : undefined, localOwnerWorkspace, containerAccess });
+} catch (error) {
+  const reason = remoteEnabled && !inContainer ? 'Check .ui-public.json and the HTTPS origin.' : error.message;
+  console.error('Could not configure SrcAudit. ' + reason);
   process.exit(1);
 }
+
 let retried = false;
 server.on('error', (error) => {
-  if (error.code === 'EADDRINUSE' && !retried) { retried = true; server.listen(0, '127.0.0.1'); }
-  else { console.error('Không mở được giao diện local.'); process.exitCode = 1; }
+  if (error.code === 'EADDRINUSE' && !inContainer && !retried) {
+    retried = true;
+    server.listen(0, bindHost);
+  } else {
+    console.error('Could not start the SrcAudit server.', error.code);
+    process.exitCode = 1;
+  }
 });
 server.on('listening', async () => {
-  const url = `http://127.0.0.1:${server.address().port}`;
-  await writeFile(path.join(root, '.ui-session.json'), JSON.stringify({ url, pid: process.pid, ...(publicAccess ? { publicUrl: new URL(publicAccess.origin).origin } : {}) }), { mode: 0o600 });
-  console.log(`SrcAudit UI: ${url}`);
+  const url = `http://127.0.0.1:${containerAccess?.port ?? server.address().port}`;
+  try {
+    await writeFile(path.join(rootDir, '.ui-session.json'), JSON.stringify({ url, pid: process.pid, ...(publicAccess ? { publicUrl: new URL(publicAccess.origin).origin } : {}) }), { mode: 0o600 });
+    console.log(`SrcAudit UI: ${url}`);
+  } catch {
+    console.error('Could not write the SrcAudit session file. Check the data directory permissions.');
+    process.exitCode = 1;
+    server.close();
+  }
 });
-server.listen(8787, '127.0.0.1');
+server.listen(internalPort, bindHost);

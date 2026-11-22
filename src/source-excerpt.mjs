@@ -52,6 +52,6 @@ export function sourceExcerptAt(lines, line, endLine = line) {
     const excerpt = clean.length > maxLineLength ? clean.slice(0, maxLineLength - 1) + '…' : clean;
     return `${number >= line && number <= last ? '>' : ' '} ${number} | ${excerpt}`;
   });
-  if (lastVisible < last) preview.push(`  … | Dòng ${lastVisible + 1}–${last} xem trong file gốc`);
+  if (lastVisible < last) preview.push(`  … | Lines ${lastVisible + 1}–${last} are available in the original file`);
   return preview.join('\n');
 }

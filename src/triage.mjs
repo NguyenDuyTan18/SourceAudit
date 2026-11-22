@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import { SEVERITIES } from './report.mjs';
 
 // Inline suppression, placed in a comment on the flagged line or alone on the line above:
-//   db.query(sql); // srcaudit-ignore SRC-SQL -- sql là hằng số
-//   # srcaudit-ignore CWE-798,SRC-SECRET -- khóa mẫu cho test
+//   db.query(sql); // srcaudit-ignore SRC-SQL -- SQL is a fixed internal query
+//   # srcaudit-ignore CWE-798,SRC-SECRET -- fixture value used by a test
 // Rule list is optional (omitted = every finding on that line). A reason after `--` is required.
 const DIRECTIVE = /(?:\/\/|#|\/\*|<!--|--|;|\{\{!?--)\s*srcaudit-ignore\b([^\r\n]*)/;
 const COMMENT_ONLY = /^\s*(?:\/\/|#|\/\*|\*|<!--|--|;|\{\{!?--)/;
@@ -45,7 +45,7 @@ export function applySuppressions(report, suppressionsByFile) {
   report.suppressed = suppressed;
   const invalid = [...suppressionsByFile.values()].reduce((sum, item) => sum + item.invalid, 0);
   report.stats.suppressions = { applied: suppressed.length, invalidDirectives: invalid };
-  if (invalid) report.limitations.push(`${invalid} chú thích srcaudit-ignore bị bỏ qua vì thiếu lý do sau "--" hoặc sai định dạng mã quy tắc.`);
+  if (invalid) report.limitations.push(`${invalid} srcaudit-ignore directives were skipped because their reason or rule ID format was invalid.`);
   return report;
 }
 
@@ -83,13 +83,13 @@ export function summarize(report) {
 export function applyBaseline(report, baselineReport, label = 'baseline') {
   if (!Array.isArray(baselineReport?.findings) ||
       (baselineReport.baselineMatched !== undefined && !Array.isArray(baselineReport.baselineMatched))) {
-    throw new Error('Baseline phải là report.json của SrcAudit.');
+    throw new Error('The baseline must be a SrcAudit report.json file.');
   }
   const known = new Map();
   for (const finding of [...baselineReport.findings, ...(baselineReport.baselineMatched ?? [])]) {
     if (typeof finding?.fingerprint === 'string') known.set(finding.fingerprint, finding);
   }
-  if (!known.size && baselineReport.findings.length) throw new Error('Baseline không có fingerprint; tạo lại bằng phiên bản SrcAudit hiện tại.');
+  if (!known.size && baselineReport.findings.length) throw new Error('The baseline has no finding fingerprints. Regenerate it with the current version of SrcAudit.');
   const fresh = []; const matched = [];
   for (const finding of report.findings) (known.has(finding.fingerprint) ? matched : fresh).push(finding);
   const current = new Set([...report.findings, ...(report.suppressed ?? [])].map((f) => f.fingerprint));

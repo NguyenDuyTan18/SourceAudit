@@ -39,9 +39,24 @@ async function waitForJob(ui, id, attempts = 100) {
   throw new Error('Job timeout');
 }
 
+test('container local access accepts the published loopback origin and rejects forwarded requests', async (t) => {
+  const ui = await setup(t, { containerAccess: { port: 9876, gateway: '172.19.0.1' } });
+  const request = (headers) => new Promise((resolve, reject) => {
+    http.get(ui.origin + '/api/health', { headers }, (response) => {
+      response.resume();
+      resolve(response.statusCode);
+    }).on('error', reject);
+  });
+  const published = { Host: '127.0.0.1:9876', Origin: 'http://127.0.0.1:9876' };
+  assert.equal(await request(published), 200);
+  assert.equal(await request({ ...published, Forwarded: 'host=example.invalid' }), 403);
+  assert.equal(await request({ ...published, Origin: 'https://example.invalid' }), 403);
+  assert.equal(await request({ ...published, Host: 'example.invalid:9876' }), 403);
+});
+
 test('UI serves application assets and applies local-session boundaries', async (t) => {
   const ui = await setup(t);
-  assert.match(ui.page, /Kiểm tra bảo mật/);
+  assert.match(ui.page, /Security scan/);
   assert.equal((await fetch(ui.origin + '/app.js')).status, 200);
   assert.match((await ui.get('/scan-scope.js')).headers.get('content-type'), /javascript/);
   assert.equal((await fetch(ui.origin + '/style.css')).status, 200);
@@ -82,7 +97,7 @@ test('local owner workspace restores the old owner history without login', async
     await writeFile(path.join(directory, 'meta.json'), JSON.stringify({ ...job, status: 'done', startedAt: new Date().toISOString() }));
   }
   const ui = await setup(t, { rootDir, localOwnerWorkspace: true });
-  assert.match(ui.page, /Kiểm tra bảo mật/);
+  assert.match(ui.page, /Security scan/);
   const history = await (await ui.get('/api/history')).json();
   assert.deepEqual(history.map(({ id }) => id), [jobs[0].id]);
 });
@@ -102,7 +117,7 @@ test('UI permits opening the home page from an external link while keeping API b
   });
   const page = await requestNavigation();
   assert.equal(page.status, 200);
-  assert.match(page.body, /Kiểm tra bảo mật/);
+  assert.match(page.body, /Security scan/);
   assert.equal((await ui.get('/api/bootstrap')).status, 200);
   for (const route of ['/api/bootstrap', '/api/health', '/app.js', '/style.css']) {
     assert.equal((await requestNavigation(route, { headers: ui.headers })).status, 403, route);
@@ -141,7 +156,7 @@ test('UI public access authenticates every route and accepts only the configured
   const loginPage = await request('/', { headers: { Accept: 'text/html' } });
   assert.equal(loginPage.status, 200);
   assert.equal(loginPage.headers['referrer-policy'], 'same-origin');
-  assert.match(loginPage.body, /Đăng nhập/);
+  assert.match(loginPage.body, /Sign in/);
   assert.doesNotMatch(loginPage.body, /name="session-token"/);
   assert.equal(loginPage.headers['www-authenticate'], undefined);
   const csrf = loginPage.body.match(/name="csrf" value="([a-f0-9]+)"/)[1];
@@ -167,7 +182,7 @@ test('UI public access authenticates every route and accepts only the configured
   assert.equal((await request('/api/bootstrap', { headers: { Cookie: cookie, Host: new URL(ui.origin).host, Origin: ui.origin, 'X-Session-Token': ui.token } })).status, 401);
   const page = await request('/', { headers: { Authorization: authorization } });
   assert.equal(page.status, 200);
-  assert.match(page.body, /Kiểm tra bảo mật/);
+  assert.match(page.body, /Security scan/);
   assert.ok(!page.body.includes(publicAccess.password));
   const headers = { ...ui.headers, Host: publicHost, Origin: publicAccess.origin };
   assert.equal((await request('/api/bootstrap', { headers })).status, 200);
@@ -271,7 +286,7 @@ test('UI validates input, limits request bodies and recovers after failed jobs',
   const start = await ui.post('/api/upload', { upload: { archive: { content: 'bm90IHppcA==' } } });
   const job = await waitForJob(ui, (await start.json()).id);
   assert.equal(job.status, 'failed');
-  assert.match(job.error, /ZIP không hợp lệ/);
+  assert.match(job.error, /Invalid ZIP file/);
   assert.ok(!job.error.includes('ENOENT'));
   const retry = await ui.post('/api/upload', zipPayload());
   assert.equal(retry.status, 202);
@@ -306,7 +321,7 @@ test('UI refuses concurrent source scans', async (t) => {
 
 test('UI and API expose source scanning only', async (t) => {
   const ui = await setup(t);
-  assert.match(ui.page, /Phân tích mã nguồn/);
+  assert.match(ui.page, /Scan source code/);
   assert.match(ui.page, /id="source-zip" type="file" accept="\.zip,application\/zip"/);
   assert.match(ui.page, /id="source-folder" type="file" webkitdirectory/);
   assert.doesNotMatch(ui.page, /Pentest website|OWASP ZAP|Tìm cờ CTF|id="(?:target-input|rules-path|demo-button)"/);
@@ -388,5 +403,5 @@ test('UI knowledge API separates technical references from research', async (t) 
   const { results } = await response.json();
   assert.deepEqual(results.map(({ id }) => id), ['REFERENCE-NIST-SSDF-1.1']);
   assert.ok(results[0].reviewSteps.length >= 2);
-  assert.match(ui.page, /<option value="reference">Tài liệu kỹ thuật<\/option>/);
+  assert.match(ui.page, /<option value="reference">Technical references<\/option>/);
 });

@@ -100,9 +100,9 @@ test('Semgrep stages configuration using synthetic paths and reports structural 
 test('Semgrep failures retain a usable report message without exposing child output', async () => {
   const files = [{ file: 'app.js', text: 'fixture source' }];
   for (const failure of [
-    { error: { code: 'ENOENT' }, expected: /Chưa tìm thấy Semgrep/ },
-    { error: { killed: true }, expected: /90 giây/ },
-    { error: {}, expected: /không hoàn tất/ },
+    { error: { code: 'ENOENT' }, expected: /Semgrep executable not found/ },
+    { error: { killed: true }, expected: /90-second/ },
+    { error: {}, expected: /did not complete/ },
   ]) {
     const result = await runSemgrep(files, { run: async () => {
       throw Object.assign(new Error('raw child output with sensitive source text'), failure.error);

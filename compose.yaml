@@ -1,0 +1,28 @@
+services:
+  srcaudit:
+    build: .
+    image: srcaudit:local
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      SRCAUDIT_PORT: "${SRCAUDIT_PORT:-8787}"
+      SRCAUDIT_REPORT_RETENTION_DAYS: "${SRCAUDIT_REPORT_RETENTION_DAYS:-7}"
+      SRCAUDIT_ACCOUNT_STORAGE_MIB: "${SRCAUDIT_ACCOUNT_STORAGE_MIB:-128}"
+    ports:
+      - "127.0.0.1:${SRCAUDIT_PORT:-8787}:8787"
+    volumes:
+      - srcaudit-data:/var/lib/srcaudit
+    tmpfs:
+      - /tmp:mode=1777,size=256m
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/api/health').then(r => { if (!r.ok) process.exit(1); }).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 4s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  srcaudit-data:

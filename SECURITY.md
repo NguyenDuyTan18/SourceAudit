@@ -1,34 +1,15 @@
-# Chính sách bảo mật
+# Security policy
 
-## Phiên bản được hỗ trợ
+## Supported versions
 
-Chỉ nhánh `main` mới nhất được nhận bản vá bảo mật.
+Security fixes are applied to the latest version on `main`.
 
-## Báo cáo lỗ hổng
+## Report a vulnerability
 
-**Vui lòng không mở issue công khai cho lỗ hổng bảo mật.**
+Use GitHub's **Security** tab and select **Report a vulnerability** to send a private report. [GitHub private reporting guide](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability)
 
-Gửi báo cáo kín qua GitHub: vào tab **Security** của repo → **Report a vulnerability**
-([Private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability)).
+Include the affected component, expected impact, operating system and Node.js or Semgrep version. Provide a minimal sanitized example and enough detail for the maintainers to verify the issue. The project aims to acknowledge reports within seven days and credit reporters after a fix, with their consent.
 
-Báo cáo nên gồm:
+This policy covers vulnerabilities in SrcAudit itself, including authorization, archive extraction and data exposure. File regular issues for false positives and missed findings. Some examples and test fixtures intentionally demonstrate unsafe source patterns.
 
-- Thành phần bị ảnh hưởng (CLI, giao diện web, giải nén ZIP, xác thực, quy tắc…)
-- Các bước tái hiện và mã/tệp mẫu tối thiểu, đã loại bỏ thông tin riêng
-- Tác động dự kiến và phiên bản Node.js, Semgrep, hệ điều hành
-
-Bạn sẽ nhận phản hồi xác nhận trong vòng 7 ngày. Sau khi bản vá được phát hành,
-lỗ hổng sẽ được công bố kèm ghi nhận người báo cáo (nếu bạn đồng ý).
-
-## Phạm vi
-
-Trong phạm vi: lỗ hổng của chính SrcAudit, ví dụ vượt qua xác thực, truy cập báo cáo
-của tài khoản khác, path traversal khi giải nén, thực thi mã khi quét, lộ dữ liệu
-trong báo cáo.
-
-Ngoài phạm vi: cảnh báo nhầm hoặc bỏ sót của quy tắc quét (hãy mở issue thường),
-các tệp mẫu cố ý chứa lỗi trong `examples/`, `test/` và `scripts/`.
-
-## Sử dụng hợp pháp
-
-Chỉ dùng SrcAudit trên mã nguồn bạn sở hữu hoặc được phép kiểm tra.
+Use SrcAudit only on source code you own or have permission to review.

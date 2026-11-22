@@ -56,23 +56,23 @@ function parseArgs(argv) {
   const options = { mode: 'quick', suites: Object.keys(SUITES) };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    const value = () => { const next = argv[++i]; if (!next || next.startsWith('--')) throw new Error(`Thiếu giá trị ${arg}`); return next; };
+    const value = () => { const next = argv[++i]; if (!next || next.startsWith('--')) throw new Error(`Missing value for ${arg}`); return next; };
     if (arg === '--fetch') options.fetch = true;
     else if (arg === '--mode') options.mode = value();
     else if (arg === '--suite') options.suites = value().split(',');
     else if (arg === '--json') options.json = value();
     else if (arg === '--check') options.check = value();
     else if (arg === '--update-baseline') options.update = value();
-    else throw new Error(`Tùy chọn không hỗ trợ: ${arg}`);
+    else throw new Error(`Unknown option: ${arg}`);
   }
-  if (!['quick', 'deep'].includes(options.mode)) throw new Error('--mode là quick hoặc deep.');
-  for (const suite of options.suites) if (!Object.hasOwn(SUITES, suite) && !Object.hasOwn(PYTHON_SUITES, suite) && !Object.hasOwn(REFERENCE_SUITES, suite)) throw new Error(`Suite không tồn tại: ${suite}`);
+  if (!['quick', 'deep'].includes(options.mode)) throw new Error('--mode must be quick or deep.');
+  for (const suite of options.suites) if (!Object.hasOwn(SUITES, suite) && !Object.hasOwn(PYTHON_SUITES, suite) && !Object.hasOwn(REFERENCE_SUITES, suite)) throw new Error(`Unknown suite: ${suite}`);
   return options;
 }
 
 function git(cwd, ...args) {
   const result = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, MSYS_NO_PATHCONV: '1', GIT_TERMINAL_PROMPT: '0' } });
-  if (result.status !== 0) throw new Error(`git ${args[0]} thất bại: ${result.stderr.trim().slice(0, 300)}`);
+  if (result.status !== 0) throw new Error(`git ${args[0]} failed: ${result.stderr.trim().slice(0, 300)}`);
   return result.stdout.trim();
 }
 
@@ -87,7 +87,7 @@ async function fetchDataset(name) {
   git(target, 'sparse-checkout', 'set', '--no-cone', ...dataset.paths);
   git(target, 'fetch', '-q', '--depth', '1', '--filter=blob:none', 'origin', dataset.commit);
   git(target, 'checkout', '-q', '--detach', dataset.commit);
-  console.error(`Đã tải ${name} @ ${dataset.commit.slice(0, 12)}`);
+  console.error(`Downloaded ${name} @ ${dataset.commit.slice(0, 12)}`);
 }
 
 function datasetPath(name) {
@@ -95,13 +95,13 @@ function datasetPath(name) {
   const target = path.join(dataDir, dataset.dir);
   if (!existsSync(path.join(target, '.git'))) return undefined;
   const head = git(target, 'rev-parse', 'HEAD');
-  if (head !== dataset.commit) throw new Error(`${name} đang ở ${head.slice(0, 12)}, cần ${dataset.commit.slice(0, 12)}; chạy lại với --fetch.`);
+  if (head !== dataset.commit) throw new Error(`${name}: local commit ${head.slice(0, 12)} differs from expected ${dataset.commit.slice(0, 12)}. Run with --fetch.`);
   return target;
 }
 
 const scanOptions = (mode) => ({ analysis: mode, maxFiles: 20000, maxFindings: 1_000_000, gitignore: false });
 const requireComplete = (report, suite) => {
-  if (report.status !== 'complete') throw new Error(suite + ' quét chưa hoàn tất: ' + report.errors.slice(0, 3).join(' | '));
+  if (report.status !== 'complete') throw new Error(suite + ' scan not completed: ' + report.errors.slice(0, 3).join(' | '));
 };
 
 async function runPairs(mode, samples = pairs) {
@@ -134,7 +134,7 @@ async function runLabeled(name, mode) {
       const onlyFiles = new Set(batch.map(({ name: file }) => pathKey(path.join(code, file + extension))));
       const report = await scanSource(code, { ...scanOptions(mode), onlyFiles });
       requireComplete(report, name + ' (' + offset + ')');
-      if (report.stats.sourceAnalysis.scanned !== batch.length) throw new Error(name + ' thiếu tệp có nhãn.');
+      if (report.stats.sourceAnalysis.scanned !== batch.length) throw new Error(name + ' did not scan every file in the batch.');
       reports.push(report);
     }
   } else {
@@ -184,7 +184,7 @@ function printSummary(results) {
   console.table(rows);
   for (const [key, result] of Object.entries(results)) {
     if (!result.categories) continue;
-    console.log(`\n${key} theo nhóm lỗi (score = TPR − FPR):`);
+    console.log(`\n${key} by weakness (score = TPR - FPR):`);
     console.table(Object.fromEntries(Object.entries(result.categories).map(([name, c]) => [name, { cwe: c.cwe, TP: c.tp, FP: c.fp, FN: c.fn, TN: c.tn, TPR: c.tpr, FPR: c.fpr, score: c.score }])));
   }
 }
@@ -200,7 +200,7 @@ async function main() {
       : suite.startsWith('clean') || REFERENCE_SUITES[suite] ? await runClean(SUITES[suite] ?? REFERENCE_SUITES[suite], options.mode)
         : await runLabeled(SUITES[suite][0], options.mode);
     if (result) results[key] = result;
-    else console.error(`Bỏ qua ${suite}: chưa có dữ liệu, chạy với --fetch.`);
+    else console.error(`Skip ${suite}: No data, run with --fetch.`);
   }
   printSummary(results);
   if (options.json) await writeFile(options.json, JSON.stringify(results, null, 2) + '\n');
@@ -210,17 +210,17 @@ async function main() {
     const slim = Object.fromEntries(Object.entries(results).map(([key, r]) => [key, { overall: r.overall, ...(r.categories ? { categories: Object.fromEntries(Object.entries(r.categories).map(([c, v]) => [c, { score: v.score, tpr: v.tpr, fpr: v.fpr }])) } : {}) }]));
     await mkdir(path.dirname(file), { recursive: true });
     await writeFile(file, JSON.stringify({ ...previous, ...slim }, null, 2) + '\n');
-    console.log(`\nĐã cập nhật baseline: ${options.update}`);
+    console.log(`\nUpdated baseline: ${options.update}`);
   }
   if (options.check) {
     const baseline = JSON.parse(await readFile(path.resolve(options.check), 'utf8'));
     const scoped = Object.fromEntries(Object.entries(baseline).filter(([key]) => key in results || options.suites.includes(key.split(':')[0]) && key.endsWith(':' + options.mode)));
     const problems = regressions(results, scoped);
-    if (problems.length) { console.error('\nĐộ chính xác giảm so với baseline:\n- ' + problems.join('\n- ')); process.exitCode = 1; }
-    else console.log('\nKhông có hồi quy so với baseline.');
+    if (problems.length) { console.error('\nBenchmark results regressed relative to the baseline:\n- ' + problems.join('\n- ')); process.exitCode = 1; }
+    else console.log('\nBenchmark results meet the baseline.');
   }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main().catch((error) => { console.error('Lỗi: ' + error.message); process.exitCode = 2; });
+  main().catch((error) => { console.error('Error: ' + error.message); process.exitCode = 2; });
 }

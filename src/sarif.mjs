@@ -27,7 +27,7 @@ function ruleDescriptor(finding) {
     name: finding.ruleId.replace(/[^A-Za-z0-9]+/g, ''),
     shortDescription: { text: finding.advisory ? `${finding.advisory.cve || finding.advisory.id}: ${finding.advisory.package}` : finding.title },
     fullDescription: { text: finding.impact || finding.title },
-    help: { text: finding.remediation || '', markdown: `${finding.remediation || ''}${finding.reference ? `\n\n[Tham khảo](${finding.reference})` : ''}` },
+    help: { text: finding.remediation || '', markdown: `${finding.remediation || ''}${finding.reference ? `\n\n[Reference](${finding.reference})` : ''}` },
     ...(finding.reference ? { helpUri: finding.reference } : {}),
     defaultConfiguration: { level: LEVEL[finding.severity] ?? 'warning' },
     properties: { tags, precision: finding.confidence === 'high' ? 'high' : finding.confidence === 'low' ? 'low' : 'medium', 'security-severity': SECURITY_SEVERITY[finding.severity] ?? '5.5' },

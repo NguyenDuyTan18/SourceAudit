@@ -20,8 +20,8 @@ async function git(cwd, args) {
     const { stdout } = await run('git', args, { cwd, timeout: 30_000, maxBuffer: 32 * 1024 * 1024, windowsHide: true, encoding: 'utf8' });
     return stdout;
   } catch (error) {
-    if (error?.code === 'ENOENT') throw new DiffError('Không tìm thấy git trên PATH; --diff cần git.');
-    throw new DiffError('git không xử lý được --diff. Kiểm tra mục tiêu nằm trong repo git và ref tồn tại (CI cần fetch đủ lịch sử, ví dụ fetch-depth: 0).');
+    if (error?.code === 'ENOENT') throw new DiffError('Git was not found on PATH. Install Git to use --diff.');
+    throw new DiffError('Git could not resolve --diff. Confirm the source is in a Git repository and the reference exists. CI may require fetch-depth: 0.');
   }
 }
 
@@ -30,12 +30,12 @@ async function git(cwd, args) {
  * including uncommitted and untracked (non-ignored) files. Returns absolute path keys.
  */
 export async function changedFiles(target, ref) {
-  if (typeof ref !== 'string' || !REF.test(ref) || ref.includes('..') || ref.endsWith('.lock')) throw new DiffError('--diff nhận một tên nhánh, tag hoặc commit hợp lệ, ví dụ origin/main.');
+  if (typeof ref !== 'string' || !REF.test(ref) || ref.includes('..') || ref.endsWith('.lock')) throw new DiffError('--diff requires a valid branch name, tag or commit ID, such as origin/main.');
   const resolved = path.resolve(target);
   const cwd = (await lstat(resolved)).isDirectory() ? resolved : path.dirname(resolved);
   const top = await realpath((await git(cwd, ['rev-parse', '--show-toplevel'])).trim());
   const base = (await git(cwd, ['merge-base', '--end-of-options', ref, 'HEAD'])).trim();
-  if (!/^[0-9a-f]{40,64}$/.test(base)) throw new DiffError('Không xác định được merge-base cho --diff.');
+  if (!/^[0-9a-f]{40,64}$/.test(base)) throw new DiffError('Could not determine the Git merge base for --diff.');
   const tracked = await git(top, ['diff', '--name-only', '-z', '--no-renames', '--diff-filter=ACMRT', base, '--']);
   const untracked = await git(top, ['ls-files', '--others', '--exclude-standard', '--full-name', '-z']);
   const files = new Set();

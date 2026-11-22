@@ -74,6 +74,6 @@ test('CISA context attaches only through a matched CVE and is explicit in report
   const report = await scanSource(file);
   const finding = report.findings.find((entry) => entry.advisory?.cve === 'CVE-2020-11023');
   assert.ok(finding.advisory.kev);
-  assert.match(finding.advisory.kev.scope, /không chứng minh/);
+  assert.match(finding.advisory.kev.scope, /Local exposure still requires assessment/);
   assert.match(renderText(report), /CISA KEV/);
 });

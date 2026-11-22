@@ -13,7 +13,7 @@ export function parseApiRisk(body, filename, commit) {
   const [, id, title] = heading;
   const references = [`https://github.com/OWASP/API-Security/blob/${commit}/editions/2023/en/${filename}`];
   const prevent = body.match(/## How To Prevent\s+([\s\S]*?)(?=\n## |$)/i)?.[1] || '';
-  const parent = { id, kind: 'api', name: title, description: clean(body.slice(0, body.indexOf('## Example Attack Scenarios') > 0 ? body.indexOf('## Example Attack Scenarios') : 6000)).slice(0, 2000), cwes: cwes(body), reviewSteps: prevent ? [clean(prevent).slice(0, 2500)] : ['Đối chiếu mô hình phân quyền, xác thực và nghiệp vụ trước khi đánh giá.'], references, role: 'manual-test-context' };
+  const parent = { id, kind: 'api', name: title, description: clean(body.slice(0, body.indexOf('## Example Attack Scenarios') > 0 ? body.indexOf('## Example Attack Scenarios') : 6000)).slice(0, 2000), cwes: cwes(body), reviewSteps: prevent ? [clean(prevent).slice(0, 2500)] : ['Review the authorization model and verify access at each relevant operation.'], references, role: 'manual-test-context' };
   const entries = [parent];
   for (const match of body.matchAll(/###\s+Scenario\s*#?\s*(\d+)\s*\n([\s\S]*?)(?=\n### |\n## |$)/gi)) entries.push({ ...parent, id: id + '-SCENARIO-' + match[1], name: `${title} — Scenario ${match[1]}`, description: clean(match[2]).slice(0, 2500), parentId: id });
   return entries;
@@ -22,7 +22,7 @@ export function parseKev(data) {
   if (!Array.isArray(data?.vulnerabilities)) throw new Error('Unsupported KEV schema');
   return data.vulnerabilities.filter((entry) => /^CVE-\d{4}-\d{4,}$/.test(entry.cveID)).map((entry) => ({
     id: 'KEV-' + entry.cveID, cve: entry.cveID, kind: 'kev', name: entry.vulnerabilityName, description: entry.shortDescription, vendor: entry.vendorProject, product: entry.product,
-    dateAdded: entry.dateAdded, cwes: Array.isArray(entry.cwes) ? entry.cwes.filter((cwe) => /^CWE-\d+$/.test(cwe)) : [], reviewSteps: [entry.requiredAction || 'Đọc hướng dẫn giảm thiểu của nhà cung cấp.'],
+    dateAdded: entry.dateAdded, cwes: Array.isArray(entry.cwes) ? entry.cwes.filter((cwe) => /^CWE-\d+$/.test(cwe)) : [], reviewSteps: [entry.requiredAction || 'Review the vendor’s mitigation guidance.'],
     references: ['https://www.cisa.gov/known-exploited-vulnerabilities-catalog', 'https://nvd.nist.gov/vuln/detail/' + entry.cveID], role: 'public-exploitation-history-not-local-compromise'
   }));
 }

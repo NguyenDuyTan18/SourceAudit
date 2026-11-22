@@ -1,0 +1,17 @@
+**
+!package.json
+!package-lock.json
+!ui.mjs
+!scan.mjs
+!LICENSE
+!src/
+!src/**
+!web/
+!web/**
+!rules/
+!rules/**
+!data/
+!data/**
+!examples/
+!examples/**
+**/__pycache__/

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, mkdir, readFile, rm, symlink } from 'node:fs/promises';
+import { mkdtemp, writeFile, mkdir, readFile, readdir, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -226,8 +226,8 @@ test('--diff scans only files changed since the merge base, including untracked 
   const report = await scanSource(root, { onlyFiles: diff.files, diffInfo: { ref: 'main' } });
   assert.deepEqual([...new Set(report.findings.map((f) => f.location.file))], ['new.js']);
   assert.equal(report.stats.diff.unchanged, 1);
-  await assert.rejects(changedFiles(root, '--output=/tmp/x'), /hợp lệ/);
-  await assert.rejects(changedFiles(root, 'no-such-branch'), /git/);
+  await assert.rejects(changedFiles(root, '--output=/tmp/x'), /valid branch name/);
+  await assert.rejects(changedFiles(root, 'no-such-branch'), /Git/i);
 
   const out = path.join(root, '.scanner-reports', 'diff');
   const result = cli('--src', root, '--diff', 'main', '--out', out, '--fail-on', 'high');
@@ -267,11 +267,26 @@ test('CLI writes SARIF and --baseline turns a failing scan into a passing one', 
   assert.match(initial.stdout, /report\.sarif/);
   const baselined = cli('--src', path.join(root, 'src'), '--out', second, '--fail-on', 'high', '--baseline', path.join(first, 'report.json'));
   assert.equal(baselined.status, 0, baselined.stderr);
-  assert.match(baselined.stdout, /Không có phát hiện mới so với baseline/);
+  assert.match(baselined.stdout, /No new findings relative to the baseline/);
   const bad = path.join(root, 'bad.json');
   await writeFile(bad, '{"findings":[{"ruleId":"X"}]}');
   const rejected = cli('--src', path.join(root, 'src'), '--out', path.join(root, 'out3'), '--baseline', bad);
   assert.equal(rejected.status, 2);
   assert.match(rejected.stderr, /fingerprint/);
   assert.equal(cli('--list-rules', '--diff', 'main').status, 2);
+});
+
+test('CLI with a fresh data directory writes reports before any write-up is imported', async (t) => {
+  const root = await fixture(t);
+  const source = path.join(root, 'app.js');
+  const dataDir = path.join(root, 'data');
+  await writeFile(source, 'const value = 1;');
+  const result = spawnSync(process.execPath, ['scan.mjs', '--src', source], {
+    cwd: repoRoot, encoding: 'utf8', env: { ...process.env, SRCAUDIT_DATA_DIR: dataDir },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const reportsDir = path.join(dataDir, '.scanner-reports');
+  const [run] = await readdir(reportsDir);
+  const report = JSON.parse(await readFile(path.join(reportsDir, run, 'report.json'), 'utf8'));
+  assert.equal(report.stats.filesScanned, 1);
 });

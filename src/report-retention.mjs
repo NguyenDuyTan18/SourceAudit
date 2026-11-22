@@ -28,7 +28,7 @@ export function resolveRetentionMs(value = process.env.SRCAUDIT_REPORT_RETENTION
   if (value === undefined || value === '') return DEFAULT_RETENTION_DAYS * DAY_MS;
   const days = Number(value);
   if (!Number.isFinite(days) || days < 0 || days > MAX_RETENTION_DAYS) {
-    throw new Error(`SRCAUDIT_REPORT_RETENTION_DAYS phải là số từ 0 đến ${MAX_RETENTION_DAYS}.`);
+    throw new Error(`SRCAUDIT_REPORT_RETENTION_DAYS must be a number from 0 to ${MAX_RETENTION_DAYS}.`);
   }
   return days * DAY_MS;
 }

@@ -295,7 +295,7 @@ export function filterWithAst(findings, sourceByFile) {
         if (verdict) verdicts.push(verdict);
       }
       if (finding.ruleId.endsWith('-SQL')) for (const builder of sqlStringBuilders(nodes)) verdicts.push(ctx.isSafe(builder, 'sql') ? 'safe' : 'unsafe');
-      if (verdicts.length && verdicts.every((v) => v === 'safe')) drop.set(finding, 'AST: mọi lời gọi nhạy cảm trên dòng chỉ nhận hằng số, dữ liệu đã làm sạch hoặc dùng dạng không thể chèn lệnh.');
+      if (verdicts.length && verdicts.every((v) => v === 'safe')) drop.set(finding, 'AST: All relevant calls on this line use constants, sanitized data or a process API that does not invoke a shell.');
     }
   }
   const removed = [];

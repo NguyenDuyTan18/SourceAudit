@@ -20,7 +20,7 @@ export function parseExpectedResults(text) {
   for (const line of String(text).split(/\r?\n/)) {
     if (!line.trim() || line.startsWith('#')) continue;
     const [name, category, real, cwe] = line.split(',').map((part) => part.trim());
-    if (!/^[A-Za-z0-9_]+$/.test(name) || !['true', 'false'].includes(real) || !/^\d+$/.test(cwe)) throw new Error(`Dòng expectedresults không hợp lệ: ${line.slice(0, 80)}`);
+    if (!/^[A-Za-z0-9_]+$/.test(name) || !['true', 'false'].includes(real) || !/^\d+$/.test(cwe)) throw new Error(`Invalid expected-results row: ${line.slice(0, 80)}`);
     cases.push({ name, category, real: real === 'true', cwe: `CWE-${cwe}` });
   }
   return cases;
@@ -123,12 +123,12 @@ export function regressions(current, baseline, tolerance = 0.005) {
   const problems = [];
   for (const [key, base] of Object.entries(baseline ?? {})) {
     const now = current[key];
-    if (!now) { problems.push(`${key}: thiếu kết quả (baseline có).`); continue; }
+    if (!now) { problems.push(`${key}: Missing results for a baseline entry.`); continue; }
     if (base.overall.score !== undefined && now.overall.score < base.overall.score - tolerance) problems.push(`${key}: score ${now.overall.score} < baseline ${base.overall.score}`);
     if (base.overall.tpr !== undefined && now.overall.tpr < base.overall.tpr - tolerance) problems.push(`${key}: TPR ${now.overall.tpr} < baseline ${base.overall.tpr}`);
     if (base.overall.fpr !== undefined && now.overall.fpr > base.overall.fpr + tolerance) problems.push(`${key}: FPR ${now.overall.fpr} > baseline ${base.overall.fpr}`);
-    if (base.overall.perKloc !== undefined && now.overall.perKloc > base.overall.perKloc + tolerance) problems.push(`${key}: ${now.overall.perKloc} cảnh báo/KLOC > baseline ${base.overall.perKloc}`);
-    if (base.overall.actionablePerKloc !== undefined && now.overall.actionablePerKloc > base.overall.actionablePerKloc + tolerance) problems.push(`${key}: ${now.overall.actionablePerKloc} cảnh báo cần xử lý/KLOC > baseline ${base.overall.actionablePerKloc}`);
+    if (base.overall.perKloc !== undefined && now.overall.perKloc > base.overall.perKloc + tolerance) problems.push(`${key}: ${now.overall.perKloc} warnings/KLOC exceed baseline ${base.overall.perKloc}`);
+    if (base.overall.actionablePerKloc !== undefined && now.overall.actionablePerKloc > base.overall.actionablePerKloc + tolerance) problems.push(`${key}: ${now.overall.actionablePerKloc} actionable warnings/KLOC exceed baseline ${base.overall.actionablePerKloc}`);
     for (const [category, entry] of Object.entries(base.categories ?? {})) {
       const nowEntry = now.categories?.[category];
       if (nowEntry && nowEntry.score < entry.score - tolerance) problems.push(`${key}/${category}: score ${nowEntry.score} < baseline ${entry.score}`);
