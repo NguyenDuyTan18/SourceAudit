@@ -143,7 +143,7 @@ Chọn **HTML · Báo cáo 1 trang** để xem bản tóm tắt tiếng Việt. 
 | Số lượng và dung lượng tệp mã nguồn | 2.000 tệp, tối đa 10 MiB mỗi tệp |
 | Tổng dung lượng mã nguồn | 50 MiB khi tải lên từ web hoặc quét sâu |
 | Tệp ZIP | Tối đa 50 MiB sau khi nén và 10.000 mục |
-| Thời gian tối đa để Semgrep quét | 90 giây |
+| Thời gian tối đa để Semgrep quét | 90 giây khi chọn tối đa 250 tệp, hoặc 240 giây khi quét nhiều tệp hơn |
 | `SRCAUDIT_REPORT_RETENTION_DAYS` | 7 ngày. Đặt `0` để tắt tự động dọn báo cáo. |
 | `SRCAUDIT_ACCOUNT_STORAGE_MIB` | 128 MiB cho mỗi không gian làm việc trên web, tính cả báo cáo và tệp tải lên đang chờ. |
 

@@ -305,7 +305,8 @@ export function createUiServer({
     await cleanEngine();
     const result = maxReportBytes <= 0 ? { error: storageFull } : semgrepRunner
       ? await scanUpload(options, onStage, semgrepRunner) : await runScanWorker(options, onStage);
-    await cleanEngine();
+    // A locked engine directory must not discard a completed report or its error details.
+    await cleanEngine()?.catch(() => {});
     if (accounts && !(await isLiveAccount(job.ownerId))) {
       await forgetJob(job);
       return;

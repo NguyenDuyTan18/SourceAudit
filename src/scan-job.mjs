@@ -48,7 +48,8 @@ export function runScanWorker(options, onStage) {
     const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => allowed.has(key.toUpperCase())));
     const child = fork(workerFile, [], {
       cwd: path.dirname(workerFile), env, execArgv: [], stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
-      windowsHide: true, timeout: 180_000,
+      // Large Deep Scans have up to 240 seconds for Semgrep, plus staging and Python review.
+      windowsHide: true, timeout: 330_000,
     });
     let result;
     child.on('message', (message) => {

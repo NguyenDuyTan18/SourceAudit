@@ -1,15 +1,13 @@
-import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
 import { matchedOperationAt, redactedSourceLines, sourceExcerptAt } from './source-excerpt.mjs';
 import { reviewPythonFindings } from './python-precision.mjs';
 import { isDockerfileName } from './scan-scope.mjs';
+import { runSemgrepProcess } from './semgrep-process.mjs';
 
-const execute = promisify(execFile);
 const rulePaths = ['semgrep-js-ts.yml', 'semgrep-multilang.yml', 'semgrep-framework-config.yml'].map((name) =>
   fileURLToPath(new URL('../rules/' + name, import.meta.url)));
 const bundled = fileURLToPath(new URL(process.platform === 'win32'
@@ -249,6 +247,28 @@ function languageCounts(staged, scanned = new Set()) {
   return languages;
 }
 
+const errorCategories = new Map([
+  ['Timeout', 'match timeout'], ['LexicalError', 'parser warning'], ['ParseError', 'parser warning'],
+  ['PartialParsing', 'parser warning'], ['OutOfMemory', 'memory error'],
+]);
+
+function coverageMessage(errors, skipped, resolve, staged) {
+  const categories = new Map();
+  for (const error of errors) {
+    const type = Array.isArray(error?.type) ? error.type[0] : error?.type;
+    const category = errorCategories.get(type) ?? 'other analysis warning';
+    const summary = categories.get(category) ?? { count: 0, files: new Set() };
+    summary.count++;
+    const file = staged.get(resolve(error?.path))?.file;
+    if (file && summary.files.size < 3) summary.files.add(file);
+    categories.set(category, summary);
+  }
+  const warnings = [...categories].map(([category, { count, files }]) =>
+    `${count} ${category}${count === 1 ? '' : 's'}${files.size ? ` (${[...files].join(', ')})` : ''}`);
+  if (skipped) warnings.push(`${skipped} selected ${skipped === 1 ? 'file was' : 'files were'} not analyzed`);
+  return warnings.length ? `Semgrep coverage: ${warnings.join('; ')}.` : undefined;
+}
+
 function normalize(output, workspace, staged) {
   if (!Array.isArray(output?.results) || !Array.isArray(output.errors) || !Array.isArray(output.paths?.scanned)) {
     throw new Error('Invalid Semgrep output');
@@ -296,21 +316,24 @@ function normalize(output, workspace, staged) {
         : { method: 'semgrep-taint', condition: 'Verify the reported data flow, input validation and runtime configuration.' },
     });
   }
-  const partial = output.errors.length > 0 || scanned.size < staged.size;
+  const message = coverageMessage(output.errors, staged.size - scanned.size, resolve, staged);
   return {
-    status: partial ? 'partial' : 'complete',
+    status: message ? 'partial' : 'complete',
     scanned: scanned.size,
     languages: languageCounts(staged, scanned),
     findings,
-    message: partial ? 'Semgrep reported analysis errors or skipped selected files.' : undefined,
+    message,
   };
 }
 
-export async function runSemgrep(files, { executable = semgrepExecutable(), run = execute, workspaceDirectory } = {}) {
+export async function runSemgrep(files, { executable = semgrepExecutable(), run = runSemgrepProcess, workspaceDirectory, removeWorkspace = rm } = {}) {
   const workspace = workspaceDirectory ?? await mkdtemp(path.join(tmpdir(), 'scanner-semgrep-'));
-  if (workspaceDirectory) await mkdir(workspace, { mode: 0o700 });
+  let created = !workspaceDirectory;
+  let result;
+  const timeout = files.length > 250 ? 240_000 : 90_000;
   const staged = new Map();
   try {
+    if (workspaceDirectory) { await mkdir(workspace, { mode: 0o700 }); created = true; }
     await mkdir(path.join(workspace, 'targets'));
     for (const { file, text, language = semgrepLanguage(file) } of files) {
       if (!language) continue;
@@ -342,16 +365,21 @@ export async function runSemgrep(files, { executable = semgrepExecutable(), run 
       '--json', '--quiet', 'targets',
     ];
     const { stdout } = await run(executable, args, {
-      cwd: workspace, env, timeout: 90_000, maxBuffer: 4 * 1024 * 1024, windowsHide: true,
+      cwd: workspace, env, timeout, maxBuffer: 4 * 1024 * 1024, windowsHide: true,
     });
-    const result = normalize(JSON.parse(stdout), workspace, staged);
-    return await reviewPythonFindings(result, staged, { executable, workspace, env, args, run });
+    result = await reviewPythonFindings(normalize(JSON.parse(stdout), workspace, staged), staged, { executable, workspace, env, args, run });
   } catch (error) {
     let message = 'Semgrep did not complete. Check the installation and scan limits.';
-    if (error.code === 'ENOENT') message = 'Semgrep executable not found. Install Semgrep CE or set SECURITYSCANNER_SEMGREP_EXE.';
-    else if (error.killed) message = 'Semgrep exceeded the 90-second analysis time limit.';
-    return { status: 'failed', scanned: 0, languages: languageCounts(staged), findings: [], message };
-  } finally {
-    await rm(workspace, { recursive: true, force: true, maxRetries: 5, retryDelay: 150 });
+    if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') message = 'Semgrep produced more analysis output than this scan can process.';
+    else if (error.code === 'ENOENT' && created) message = 'Semgrep executable not found. Install Semgrep CE or set SECURITYSCANNER_SEMGREP_EXE.';
+    else if (error.killed) message = `Semgrep exceeded the ${timeout / 1000}-second analysis time limit.`;
+    else if (!created) message = 'Semgrep could not create its temporary workspace.';
+    result = { status: 'failed', scanned: 0, languages: languageCounts(staged), findings: [], message };
   }
+  if (created) {
+    await removeWorkspace(workspace, { recursive: true, force: true, maxRetries: 5, retryDelay: 150 }).catch(() => {
+      result.message = [result.message, 'Semgrep could not remove its temporary workspace.'].filter(Boolean).join(' ');
+    });
+  }
+  return result;
 }

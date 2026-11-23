@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
-import { access, readdir, readFile, rm } from 'node:fs/promises';
+import { access, mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { runSemgrep } from '../src/semgrep.mjs';
+import { runSemgrepProcess } from '../src/semgrep-process.mjs';
 import { createReport, finishReport, renderHtml, renderText } from '../src/report.mjs';
 
 test('Semgrep scans staged source and maps only recognized results back to the uploaded paths', async () => {
@@ -127,6 +129,19 @@ test('Semgrep failures retain a usable report message without exposing child out
   assert.equal(malformed.status, 'failed');
 });
 
+test('partial results identify safe categories and original paths without disclosing raw engine messages', async () => {
+  const result = await runSemgrep([{ file: 'src/app.py', text: 'fixture' }], { run: async () => ({ stdout: JSON.stringify({
+    results: [], paths: { scanned: ['targets/1.py'] }, errors: [
+      { type: 'Timeout', path: 'targets/1.py', message: 'private input' },
+      { type: ['PartialParsing', []], path: '/unrelated.txt', message: 'private filesystem location' },
+    ],
+  }) }) });
+  assert.equal(result.status, 'partial');
+  assert.match(result.message, /1 match timeout \(src\/app\.py\)/);
+  assert.match(result.message, /1 parser warning/);
+  assert.doesNotMatch(result.message, /private|unrelated|targets/);
+});
+
 test('a locked temporary directory does not replace the Semgrep timeout with a cleanup error', async () => {
   const result = await runSemgrep([{ file: 'app.js', text: 'fixture source' }], {
     run: async () => { throw Object.assign(new Error('process stopped'), { killed: true }); },
@@ -148,6 +163,23 @@ test('Deep Scan grants larger source sets a longer bounded analysis window', asy
   } });
   assert.equal(result.status, 'complete');
   assert.equal(result.scanned, inputs.length);
+});
+
+test('Windows analysis timeout terminates the launched process tree', { skip: process.platform !== 'win32' }, async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), 'srcaudit-process-test-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const marker = path.join(root, 'child-pid');
+  const launcher = `
+    const { spawn } = require('node:child_process');
+    const { writeFileSync } = require('node:fs');
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 12000)'], { stdio: 'ignore', windowsHide: true });
+    writeFileSync(process.argv[1], String(child.pid));
+    setTimeout(() => {}, 12000);
+  `;
+  await assert.rejects(runSemgrepProcess(process.execPath, ['-e', launcher, marker], { timeout: 3000, windowsHide: true }), { killed: true });
+  const pid = Number(await readFile(marker, 'utf8'));
+  assert.ok(pid > 0);
+  assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
 });
 
 test('Python path review keeps warnings when the rewritten copy was skipped, failed or still has a path warning', async () => {

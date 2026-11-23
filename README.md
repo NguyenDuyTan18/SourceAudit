@@ -143,7 +143,7 @@ In the web workspace, **HTML · Báo cáo 1 trang** opens a Vietnamese one-page 
 | Source selection | 2,000 files and 10 MiB per file |
 | Total source size | 50 MiB for web uploads and Deep Scan |
 | ZIP | 50 MiB compressed and at most 10,000 entries |
-| Semgrep scan timeout | 90 seconds |
+| Semgrep scan timeout | 90 seconds for up to 250 selected files, or 240 seconds for larger scans |
 | `SRCAUDIT_REPORT_RETENTION_DAYS` | 7 days. Set to `0` to disable automatic report cleanup. |
 | `SRCAUDIT_ACCOUNT_STORAGE_MIB` | 128 MiB per web workspace, including queued uploads and reports. |
 
