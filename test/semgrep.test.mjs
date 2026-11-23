@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, readdir, readFile } from 'node:fs/promises';
+import { access, readdir, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { runSemgrep } from '../src/semgrep.mjs';
@@ -125,6 +125,29 @@ test('Semgrep failures retain a usable report message without exposing child out
   }
   const malformed = await runSemgrep(files, { run: async () => ({ stdout: '{"results":[]}' }) });
   assert.equal(malformed.status, 'failed');
+});
+
+test('a locked temporary directory does not replace the Semgrep timeout with a cleanup error', async () => {
+  const result = await runSemgrep([{ file: 'app.js', text: 'fixture source' }], {
+    run: async () => { throw Object.assign(new Error('process stopped'), { killed: true }); },
+    removeWorkspace: async (workspace, options) => {
+      await rm(workspace, options);
+      throw Object.assign(new Error('workspace still held open'), { code: 'EBUSY' });
+    },
+  });
+  assert.equal(result.status, 'failed');
+  assert.match(result.message, /90-second analysis time limit/);
+  assert.match(result.message, /temporary workspace/);
+});
+
+test('Deep Scan grants larger source sets a longer bounded analysis window', async () => {
+  const inputs = Array.from({ length: 251 }, (_, i) => ({ file: `app-${i}.js`, text: 'const value = 1;' }));
+  const result = await runSemgrep(inputs, { run: async (_command, _args, { timeout }) => {
+    assert.equal(timeout, 240_000);
+    return { stdout: JSON.stringify({ results: [], errors: [], paths: { scanned: inputs.map((_, i) => `targets/${i + 1}.js`) } }) };
+  } });
+  assert.equal(result.status, 'complete');
+  assert.equal(result.scanned, inputs.length);
 });
 
 test('Python path review keeps warnings when the rewritten copy was skipped, failed or still has a path warning', async () => {
