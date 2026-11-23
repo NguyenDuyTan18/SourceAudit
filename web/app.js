@@ -1,11 +1,12 @@
 import { isDockerfileName, isTestPath, MAX_SOURCE_FILE_BYTES, MAX_SOURCE_FILES, MAX_SOURCE_TOTAL_BYTES, MAX_ZIP_BYTES, MIB } from '/scan-scope.js';
+import { findingStatement, flowTraceText, groupReportFindings, locationText, reportMode, scanModeLabel, SEVERITIES } from '/report-findings.js';
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const token = $('meta[name="session-token"]').content;
-const levels = ['critical', 'high', 'medium', 'low', 'info'];
 const names = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low', info: 'Info' };
-const state = { job: null, selected: null, busy: false, ready: false, knowledgePage: 1, knowledgeRequest: 0, folderFiles: [] };
+const state = { mode: 'quick', reports: new Map(), groups: [], selected: null, busy: false, ready: false, knowledgePage: 1, knowledgeRequest: 0, folderFiles: [] };
+const selectedJob = () => state.reports.get(state.mode);
 const sourceFileCount = MAX_SOURCE_FILES.toLocaleString('en-US');
 $('#zip-limits').textContent = `Up to ${sourceFileCount} source files, ${MAX_SOURCE_FILE_BYTES / MIB} MiB per file, ${MAX_SOURCE_TOTAL_BYTES / MIB} MiB of source in total, and ${MAX_ZIP_BYTES / MIB} MiB per ZIP. Test files are skipped.`;
 const sourceExtensions = new Set();
@@ -45,9 +46,9 @@ function setBusy(value) {
   const disabled = value || !state.ready;
   $('#scan-button').disabled = disabled;
   $('#source-upload').disabled = disabled;
-  $('#source-analysis-options').disabled = disabled;
+  $$('[data-scan-mode]').forEach((button) => { button.disabled = disabled; });
   $('#scan-progress').hidden = !value;
-  $('#scan-action').textContent = value ? 'Scanning…' : 'Start scan';
+  $('#scan-action').textContent = value ? 'Scanning…' : state.mode === 'deep' ? 'Start Semgrep Scan' : 'Start Quick Scan';
   if (value) $('#scan-stage').textContent = 'Preparing the scan…';
 }
 function setScanReadiness(status, text) {
@@ -66,12 +67,22 @@ function showView(view) {
   if (view === 'history') loadHistory().catch((error) => message(error.message));
   if (view === 'users') loadUsers().catch((error) => message(error.message));
 }
-function updateSourceAnalysis() {
-  const deep = $('#source-analysis').value === 'deep';
+function selectMode(mode) {
+  state.mode = mode;
+  const deep = mode === 'deep';
+  $$('[data-scan-mode]').forEach((button) => { button.setAttribute('aria-pressed', String(button.dataset.scanMode === mode)); });
+  $('#engine-title').textContent = scanModeLabel(mode);
+  $('#quick-overview').hidden = deep;
   $('#source-analysis-help').textContent = deep
-    ? 'Use Semgrep to analyze code and configuration and check dependency versions.'
-    : 'Check source patterns, configuration and dependency versions.';
+    ? 'Runs the bundled Semgrep rule packs and checks dependency versions.'
+    : 'Checks source patterns, configuration, credentials and dependency versions.';
   $('#scan-scope').textContent = deep ? 'Semgrep · 8 languages plus configuration · Local processing' : 'Static analysis · Local processing';
+  $('#finding-search').value = '';
+  $('#severity-filter').value = 'all';
+  $('#finding-kind').value = 'all';
+  state.selected = null;
+  setBusy(state.busy);
+  renderReport();
 }
 function updateZipSelection(event) {
   const input = event.currentTarget;
@@ -155,17 +166,10 @@ function field(container, title, text, code = false) {
   container.append(section);
   return section;
 }
-function locationOf(finding) {
-  const { file, line, column, endLine, endColumn, pointer } = finding.location;
-  if (line) {
-    const start = `${file}:${line}${column ? ':' + column : ''}`;
-    return endLine ? `${start}–${endLine}:${endColumn}` : start;
-  }
-  return file + (pointer ? ' #' + pointer : '');
-}
-function renderDetail(finding) {
+function renderDetail(group) {
   const container = $('#finding-detail'); container.replaceChildren();
-  if (!finding) { container.append(element('p', 'no-match', 'Select a finding to see its details.')); return; }
+  if (!group) { container.append(element('p', 'no-match', 'Select an issue to see its details.')); return; }
+  const { finding, occurrences } = group;
   const badge = element('span', `severity-chip ${finding.severity}`, names[finding.severity]);
   container.append(badge, element('h3', '', finding.title));
   const meta = element('div', 'detail-meta');
@@ -176,34 +180,45 @@ function renderDetail(finding) {
   }[finding.detection?.method];
   if (method) meta.append(element('span', '', method));
   container.append(meta);
-  field(container, 'LOCATION', locationOf(finding), true);
-  if (finding.sourceExcerpt) field(container, 'SOURCE EXCERPT (REDACTED)', finding.sourceExcerpt, true);
-  if (finding.relatedRuleIds?.length) field(container, 'RELATED RULES', finding.relatedRuleIds.join(', '));
-  field(container, 'EVIDENCE', finding.evidence, true);
-  field(container, 'POTENTIAL IMPACT', finding.impact);
-  if (finding.detection) field(container, 'WHEN THIS APPLIES', finding.detection.condition);
-  field(container, 'REMEDIATION', finding.remediation);
-  if (finding.trace) {
-    const roles = { source: 'Input', propagation: 'Propagation', sink: 'Sink' };
-    field(container, 'DATA-FLOW TRACE', finding.trace.map((step) =>
-      `${step.file}:${step.line} [${roles[step.role] || step.role}] ${step.evidence}`).join('\n'), true);
+  const locations = element('section', 'issue-locations');
+  locations.append(element('h4', '', finding.advisory ? 'Dependency evidence' : 'Flagged locations and code'));
+  const list = element('ul', 'occurrence-list');
+  for (const occurrence of occurrences) {
+    const item = element('li', 'occurrence');
+    item.append(element('code', 'occurrence-location', locationText(occurrence.location)), element('pre', 'occurrence-code', findingStatement(occurrence)));
+    if (occurrence.sourceExcerpt) {
+      const context = element('details');
+      context.append(element('summary', '', 'Redacted source context'), element('pre', '', occurrence.sourceExcerpt));
+      item.append(context);
+    }
+    list.append(item);
   }
+  locations.append(list);
+  container.append(locations);
+  field(container, 'POTENTIAL IMPACT', finding.impact);
+  field(container, 'REMEDIATION', finding.remediation);
+  const technical = element('details', 'report-details');
+  technical.append(element('summary', '', 'Technical details'));
+  if (finding.relatedRuleIds?.length) field(technical, 'RELATED RULES', finding.relatedRuleIds.join(', '));
+  if (finding.detection) field(technical, 'WHEN THIS APPLIES', finding.detection.condition);
+  const trace = flowTraceText(occurrences);
+  if (trace) field(technical, 'DATA-FLOW TRACE', trace, true);
   if (finding.advisory) {
-    field(container, 'CVE / GHSA', `${finding.advisory.cve || 'No CVE assigned'} · ${finding.advisory.id}`);
-    field(container, 'PACKAGE / VERSION / RANGE', `${finding.advisory.ecosystem} ${finding.advisory.package}@${finding.advisory.version}\nAffected versions: ${finding.advisory.affectedRange}\nFixed version: ${finding.advisory.fixed || 'Not specified'}`, true);
-    if (finding.advisory.description) field(container, 'ADVISORY CONTEXT', finding.advisory.description);
-    if (finding.advisory.kev) field(container, 'CISA KEV — KNOWN EXPLOITATION HISTORY', `${finding.advisory.kev.scope}\nAdded to the catalog: ${finding.advisory.kev.dateAdded}`);
+    field(technical, 'CVE / GHSA', `${finding.advisory.cve || 'No CVE assigned'} · ${finding.advisory.id}`);
+    field(technical, 'PACKAGE / VERSION / RANGE', `${finding.advisory.ecosystem} ${finding.advisory.package}@${finding.advisory.version}\nAffected versions: ${finding.advisory.affectedRange}\nFixed version: ${finding.advisory.fixed || 'Not specified'}`, true);
+    if (finding.advisory.description) field(technical, 'ADVISORY CONTEXT', finding.advisory.description);
+    if (finding.advisory.kev) field(technical, 'CISA KEV — KNOWN EXPLOITATION HISTORY', `${finding.advisory.kev.scope}\nAdded to the catalog: ${finding.advisory.kev.dateAdded}`);
   }
   if (finding.knowledge) {
-    if (finding.knowledge.cweContext) field(container, 'CWE CONTEXT', `${finding.knowledge.cweContext.name}\n${finding.knowledge.cweContext.description}`);
-    if (finding.knowledge.owaspTests?.length) field(container, 'RELATED OWASP TESTS', finding.knowledge.owaspTests.map((entry) => `${entry.id}: ${entry.name}`).join('\n'));
-    if (finding.knowledge.verificationRequirements?.length) field(container, 'ASVS VERIFICATION REQUIREMENTS', finding.knowledge.verificationRequirements.map((entry) => `${entry.id} · L${entry.level}\n${entry.description}`).join('\n\n'));
-    if (finding.knowledge.apiScenarios?.length) field(container, 'RELATED API SECURITY SCENARIOS', finding.knowledge.apiScenarios.map((entry) => `${entry.id}: ${entry.name}`).join('\n'));
+    if (finding.knowledge.cweContext) field(technical, 'CWE CONTEXT', `${finding.knowledge.cweContext.name}\n${finding.knowledge.cweContext.description}`);
+    if (finding.knowledge.owaspTests?.length) field(technical, 'RELATED OWASP TESTS', finding.knowledge.owaspTests.map((entry) => `${entry.id}: ${entry.name}`).join('\n'));
+    if (finding.knowledge.verificationRequirements?.length) field(technical, 'ASVS VERIFICATION REQUIREMENTS', finding.knowledge.verificationRequirements.map((entry) => `${entry.id} · L${entry.level}\n${entry.description}`).join('\n\n'));
+    if (finding.knowledge.apiScenarios?.length) field(technical, 'RELATED API SECURITY SCENARIOS', finding.knowledge.apiScenarios.map((entry) => `${entry.id}: ${entry.name}`).join('\n'));
     const section = element('div', 'detail-field'); section.append(element('h4', '', 'REVIEW STEPS'));
     const list = element('ul'); finding.knowledge.reviewSteps.forEach((step) => list.append(element('li', '', step)));
-    section.append(list); container.append(section);
-    if (finding.knowledge.relatedWriteups.length) field(container, 'RELATED WRITE-UPS', `${finding.knowledge.relatedWriteups.length} imported notes on ${finding.knowledge.topic}.`);
-    if (finding.knowledge.advisoryExamples?.length) field(container, 'ADVISORY EXAMPLES FOR THIS CWE', finding.knowledge.advisoryExamples.map((entry) => `${entry.cve || entry.id}: ${entry.name}`).join('\n') + '\nThese examples illustrate the weakness category.');
+    section.append(list); technical.append(section);
+    if (finding.knowledge.relatedWriteups.length) field(technical, 'RELATED WRITE-UPS', `${finding.knowledge.relatedWriteups.length} imported notes on ${finding.knowledge.topic}.`);
+    if (finding.knowledge.advisoryExamples?.length) field(technical, 'ADVISORY EXAMPLES FOR THIS CWE', finding.knowledge.advisoryExamples.map((entry) => `${entry.cve || entry.id}: ${entry.name}`).join('\n') + '\nThese examples illustrate the weakness category.');
   }
   const writeupReferences = finding.knowledge?.relatedWriteups.flatMap((entry) => entry.references) ?? [];
   const references = [...new Set([finding.reference, ...writeupReferences, ...(finding.knowledge?.references || [])])];
@@ -212,17 +227,18 @@ function renderDetail(finding) {
     if (!/^https:\/\//.test(reference)) continue;
     const link = element('a', '', reference); link.href = reference; link.target = '_blank'; link.rel = 'noopener noreferrer'; section.append(link);
   }
-  container.append(section);
+  if (section.childElementCount > 1) technical.append(section);
+  if (technical.childElementCount > 1) container.append(technical);
 }
 function renderFindings() {
-  const report = state.job?.report;
+  const report = selectedJob()?.report;
   const search = $('#finding-search').value.toLowerCase().trim();
   const severity = $('#severity-filter').value;
   const kind = $('#finding-kind').value;
-  const findings = (report?.findings || []).filter((finding) => {
+  const findings = state.groups.filter(({ finding, occurrences }) => {
     const group = finding.advisory ? 'dependency' : 'source';
     const matches = (kind === 'all' || kind === group) && (severity === 'all' || severity === finding.severity);
-    return matches && `${finding.title} ${finding.ruleId} ${finding.cwe} ${locationOf(finding)}`.toLowerCase().includes(search);
+    return matches && `${finding.title} ${finding.ruleId} ${finding.cwe} ${occurrences.map((item) => locationText(item.location)).join(' ')}`.toLowerCase().includes(search);
   });
   $('#results-empty').hidden = Boolean(report?.findings.length);
   $('#finding-workspace').hidden = !report?.findings.length;
@@ -233,31 +249,46 @@ function renderFindings() {
   }
   if (!findings.includes(state.selected)) state.selected = findings[0];
   const list = $('#finding-list'); list.replaceChildren();
-  for (const finding of findings) {
-    const row = element('button', `finding-row${state.selected === finding ? ' selected' : ''}`);
+  for (const group of findings) {
+    const { finding, occurrences } = group;
+    const row = element('button', `finding-row ${finding.severity}${state.selected === group ? ' selected' : ''}`);
     row.type = 'button';
+    row.setAttribute('aria-pressed', String(state.selected === group));
     const top = element('div', 'row-top'); top.append(element('span', `severity-chip ${finding.severity}`, names[finding.severity]), element('span', 'rule-id', finding.cwe));
-    row.append(top, element('h3', '', finding.title), element('p', '', locationOf(finding)));
-    row.addEventListener('click', () => { state.selected = finding; renderFindings(); }); list.append(row);
+    row.append(top, element('h3', '', finding.title), element('p', '', occurrences.length === 1 ? locationText(occurrences[0].location) : `${occurrences.length} locations`));
+    row.addEventListener('click', () => {
+      state.selected = group;
+      for (const other of list.querySelectorAll('.finding-row')) {
+        other.classList.toggle('selected', other === row);
+        other.setAttribute('aria-pressed', String(other === row));
+      }
+      renderDetail(group);
+    });
+    list.append(row);
   }
   if (!findings.length) list.append(element('p', 'no-match', 'No findings match the filters.'));
   renderDetail(state.selected);
 }
 function renderReport() {
-  const report = state.job?.report;
-  $('#result-total').textContent = report?.findings.length || 0;
-  for (const level of levels) $(`#count-${level}`).textContent = report?.findings.filter((finding) => finding.severity === level).length || 0;
-  $('#result-target').textContent = report ? report.target : 'No scan selected.';
+  const report = selectedJob()?.report;
+  state.groups = groupReportFindings(report?.findings ?? []);
+  $('#report-mode').textContent = scanModeLabel(state.mode);
+  $('#result-total').textContent = state.groups.length;
+  for (const level of SEVERITIES) $(`#count-${level}`).textContent = state.groups.filter(({ finding }) => finding.severity === level).length;
+  const occurrences = state.groups.reduce((total, group) => total + group.occurrences.length, 0);
+  $('#result-target').textContent = report ? `${report.target} · ${state.groups.length} unique issues · ${occurrences} tracked locations` : 'No scan selected.';
   $$('[data-download]').forEach((button) => { button.disabled = !report; });
-  const notice = $('#report-notice'); notice.hidden = !report;
+  const notice = $('#report-notice');
+  const coverage = $('#report-coverage');
+  coverage.hidden = !report;
+  coverage.open = Boolean(report && report.status !== 'complete');
   notice.classList.toggle('error', Boolean(report && report.status !== 'complete'));
   if (report) notice.textContent = `${report.status === 'complete' ? 'Scan completed for the selected scope.' : 'The scan could not cover all selected files.'} ${report.stats.filesScanned} files read. Review findings in context before acting on the severity rating.${report.errors.length ? '\n' + report.errors.slice(0, 10).join('\n') : ''}`;
   if (report?.stats.formats) notice.textContent += `\nFormats read: ${Object.entries(report.stats.formats).map(([format, count]) => `${format} (${count})`).join(', ') || 'None'}. Analysis coverage varies by format.`;
   if (report?.stats.dependencyAnalysis) {
     const dep = report.stats.dependencyAnalysis;
-    const sourceFindings = report.findings.filter(({ advisory }) => !advisory);
-    const sourceRuleCount = new Set(sourceFindings.map(({ ruleId }) => ruleId)).size;
-    notice.textContent += `\nSource and configuration: ${sourceFindings.length} findings across ${sourceRuleCount} rules · Dependency findings: ${report.findings.length - sourceFindings.length}.`;
+    const sourceCount = state.groups.filter(({ finding }) => !finding.advisory).length;
+    notice.textContent += `\nSource and configuration: ${sourceCount} unique issues · Dependency: ${state.groups.length - sourceCount} unique issues.`;
     notice.textContent += `\nChecked ${dep.packages} npm, PyPI and Composer package versions against ${dep.advisoryCount} advisories. Unresolved versions: ${dep.unresolved}. Unsupported manifests: ${dep.unsupportedManifests}. Advisory ranges that could not be assessed: ${dep.unassessedRanges ?? 0}.`;
   }
   const engineStatuses = { complete: 'Complete', partial: 'Partial', skipped: 'Skipped', failed: 'Failed' };
@@ -269,8 +300,6 @@ function renderReport() {
     if (languages.length) notice.textContent += '\nBy language: ' + languages.join(' · ') + '.';
     const hmacDigests = analysis.pythonPrecision?.reasons?.['python-hmac-digest-factory'];
     if (hmacDigests) notice.textContent += `\nPython context: filtered ${hmacDigests} SHA-1 matches whose function is used only as the HMAC digest in ItsDangerous within the module.`;
-  } else if (report) {
-    notice.textContent += '\nQuick scan uses patterns and local data-flow tracking. Choose deep scan for Semgrep structural and data-flow analysis.';
   }
   if (report?.stats.contextFilter) {
     const { removed, downgraded } = report.stats.contextFilter;
@@ -285,7 +314,12 @@ async function watchJob(id) {
   for (;;) {
     const job = await api(`/api/jobs/${id}`);
     if (job.status === 'failed') throw new Error(job.error);
-    if (job.status === 'done') { state.job = job; state.selected = null; $('#finding-search').value = ''; $('#severity-filter').value = 'all'; $('#finding-kind').value = 'all'; renderReport(); return; }
+    if (job.status === 'done') {
+      const mode = job.sourceAnalysis ?? reportMode(job.report);
+      state.reports.set(mode, job);
+      selectMode(mode);
+      return;
+    }
     const stage = job.stage || 'Analyzing source files…';
     if ($('#scan-stage').textContent !== stage) $('#scan-stage').textContent = stage;
     await new Promise((resolve) => setTimeout(resolve, 600));
@@ -295,7 +329,7 @@ async function begin() {
   if (state.busy || !state.ready) return;
   message(''); setBusy(true);
   try {
-    const sourceAnalysis = $('#source-analysis').value;
+    const sourceAnalysis = state.mode;
     const folder = $('#upload-kind-folder').checked;
     const files = state.folderFiles;
     if (folder && !files.length) throw new Error('Choose a source folder.');
@@ -347,8 +381,8 @@ async function loadHistory() {
   const entries = await api('/api/history'); const list = $('#history-list'); list.replaceChildren();
   for (const entry of entries) {
     const row = element('button', 'panel history-item');
-    const title = element('div'); title.append(element('h3', '', entry.target || 'Scan source code'), element('p', '', `${new Date(entry.startedAt).toLocaleString('en-US')} · ${entry.status === 'queued' ? 'Queued' : entry.status === 'running' ? 'Running' : entry.status === 'failed' ? 'Failed' : entry.scanStatus === 'complete' ? 'Complete' : 'Incomplete'}`));
-    row.append(title, element('span', 'history-count', entry.count !== undefined ? `${entry.count} findings ↗` : '↗'));
+    const title = element('div'); title.append(element('h3', '', entry.target || 'Scan source code'), element('p', '', `${entry.sourceAnalysis ? `${scanModeLabel(entry.sourceAnalysis)} · ` : ''}${new Date(entry.startedAt).toLocaleString('en-US')} · ${entry.status === 'queued' ? 'Queued' : entry.status === 'running' ? 'Running' : entry.status === 'failed' ? 'Failed' : entry.scanStatus === 'complete' ? 'Complete' : 'Incomplete'}`));
+    row.append(title, element('span', 'history-count', entry.count !== undefined ? `${entry.count} matches ↗` : '↗'));
     row.addEventListener('click', async () => {
       if (entry.status === 'failed') { message('This scan failed. Select the source again to retry.'); return; }
       showView('scan'); setBusy(true);
@@ -365,7 +399,8 @@ async function loadHistory() {
         remove.disabled = true;
         try {
           await api('/api/jobs/' + entry.id + '/delete', {});
-          if (state.job?.id === entry.id) { state.job = null; state.selected = null; renderReport(); }
+          for (const [mode, job] of state.reports) if (job.id === entry.id) state.reports.delete(mode);
+          if (!selectedJob()) { state.selected = null; renderReport(); }
           await loadHistory();
         } catch (error) { message(error.message); remove.disabled = false; }
       });
@@ -408,7 +443,7 @@ $('#logout-button').addEventListener('click', async (event) => {
     button.disabled = false;
   }
 });
-$('#source-analysis').addEventListener('change', updateSourceAnalysis);
+for (const button of $$('[data-scan-mode]')) button.addEventListener('click', () => selectMode(button.dataset.scanMode));
 for (const radio of $$('input[name="upload-kind"]')) radio.addEventListener('change', updateUploadKind);
 $('#source-zip').addEventListener('change', updateZipSelection);
 $('#source-folder').addEventListener('change', updateFolderSelection);
@@ -439,7 +474,7 @@ api('/api/me').then((me) => {
 for (const button of $$('[data-download]')) button.addEventListener('click', async () => {
   try {
     const format = button.dataset.download;
-    const response = await fetch(`/api/reports/${state.job.id}/${format}`, { headers: { 'X-Session-Token': token } });
+    const response = await fetch(`/api/reports/${selectedJob().id}/${format}`, { headers: { 'X-Session-Token': token } });
     if (!response.ok) throw new Error('Could not download the report.');
     const url = URL.createObjectURL(await response.blob());
     const anchor = element('a'); anchor.href = url; anchor.download = `security-report.${format}`; document.body.append(anchor); anchor.click(); anchor.remove(); setTimeout(() => URL.revokeObjectURL(url), 30000);

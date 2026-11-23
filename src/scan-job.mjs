@@ -3,7 +3,6 @@ import { mkdir, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { scanSource } from './source.mjs';
-import { runSemgrep } from './semgrep.mjs';
 import { prepareZipUpload, ZipInputError } from './uploads.mjs';
 import { finishReport, ReportSizeError, writeReports } from './report.mjs';
 import { enrichReport, loadWriteups } from './knowledge.mjs';
@@ -22,7 +21,8 @@ export async function scanUpload({ directory, engineWorkspace, knowledgeDir, max
     onStage(job.sourceAnalysis === 'deep' ? 'Running Semgrep and checking dependencies...' : 'Scanning source code...');
     const report = await scanSource(uploaded.rootDir, {
       analysis: job.sourceAnalysis,
-      semgrepRunner: semgrepRunner ?? ((files) => runSemgrep(files, { workspaceDirectory: engineWorkspace })),
+      semgrepRunner,
+      engineWorkspace,
     });
     report.target = 'Upload: ' + job.label;
     report.stats.uploadedFiles = uploaded.files;

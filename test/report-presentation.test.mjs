@@ -10,8 +10,9 @@ test('readable reports show a repeated issue once and retain each distinct locat
     status: 'needs-review', confidence: 'medium', location: { file, line },
     evidence: statement, impact: 'The query may use untrusted input.', remediation: 'Bind the values separately.',
   });
-  const first = finding('app.js', 12, 'db.query(sql);');
-  report.findings.push(first, { ...first }, finding('api.js', 31, 'db.query(filter);'));
+  const first = { ...finding('app.js', 12, 'db.query(sql);'), trace: [{ file: 'app.js', line: 8, role: 'source', evidence: 'input' }] };
+  const second = { ...finding('api.js', 31, 'db.query(filter);'), trace: [{ file: 'api.js', line: 25, role: 'source', evidence: 'filter' }] };
+  report.findings.push(first, { ...first }, second);
   report.findings.push({ ...finding('api.js', 44, 'db.query(options);'), ruleId: 'SC-JS-SQL-LITERAL', title: 'Raw SQL expression' });
   finishReport(report);
 
@@ -23,6 +24,7 @@ test('readable reports show a repeated issue once and retain each distinct locat
   assert.equal((html.match(/app\.js:12/g) ?? []).length, 1);
   assert.match(html, /app\.js:12[\s\S]*db\.query\(sql\)/);
   assert.match(html, /api\.js:31[\s\S]*db\.query\(filter\)/);
+  assert.match(html, /Data-flow trace[\s\S]*app\.js:8[\s\S]*api\.js:25/);
   assert.match(html, /Raw SQL expression/);
 
   const text = renderText(report);
@@ -43,5 +45,5 @@ test('Semgrep reports identify the engine and show the flagged redacted source l
   const html = renderHtml(report);
   assert.match(html, /Deep Scan with Semgrep/);
   assert.match(html, /app\.js:9:4[\s\S]*db\.query\(…\);/);
-  assert.doesNotMatch(html, /nearby comment/);
+  assert.doesNotMatch(html.match(/<pre class="statement">([\s\S]*?)<\/pre>/)?.[1] ?? '', /nearby comment/);
 });

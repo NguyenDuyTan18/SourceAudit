@@ -9,6 +9,7 @@ import { frameworkConfigCases } from './semgrep-framework-config-cases.mjs';
 import { pythonCoverageCases } from './semgrep-python-coverage-cases.mjs';
 
 const pairs = [...internalCases, ...pythonCoverageCases];
+const compareQuick = process.argv.includes('--compare-quick');
 
 const folder = await mkdtemp(path.join(tmpdir(), 'scanner-semgrep-bench-'));
 try {
@@ -20,11 +21,11 @@ try {
       await writeFile(destination, item[variant], { flag: 'wx' });
     }
   }
-  const quick = await scanSource(folder);
   const deep = await scanSource(folder, { analysis: 'deep' });
   if (deep.status !== 'complete') throw new Error(deep.errors.join(' '));
-  assert.equal(quick.stats.filesScanned, pairs.length * 2);
   assert.equal(deep.stats.sourceAnalysis.scanned, pairs.length * 2);
+  const quick = compareQuick ? await scanSource(folder) : undefined;
+  if (quick) assert.equal(quick.stats.filesScanned, pairs.length * 2);
   const languages = { js: 'JavaScript', ts: 'TypeScript', py: 'Python', php: 'PHP', java: 'Java', go: 'Go', cs: 'C#', rb: 'Ruby' };
   const expectedCounts = {};
   for (const item of pairs) {
@@ -39,19 +40,20 @@ try {
   const detected = (report, item, variant) => matching(report, item, variant).length > 0;
   const rows = pairs.map((item) => ({
     case: item.name, cwe: item.cwe,
-    quickVulnerable: detected(quick, item, 'vulnerable'),
     deepVulnerable: detected(deep, item, 'vulnerable'),
-    quickFixedFlagged: detected(quick, item, 'fixed'),
     deepFixedFlagged: detected(deep, item, 'fixed'),
+    ...(quick ? { quickVulnerable: detected(quick, item, 'vulnerable'), quickFixedFlagged: detected(quick, item, 'fixed') } : {}),
   }));
   console.table(rows);
   console.log(JSON.stringify({
     pairs: rows.length,
-    quickDetected: rows.filter((row) => row.quickVulnerable).length,
     deepDetected: rows.filter((row) => row.deepVulnerable).length,
-    quickFalsePositives: rows.filter((row) => row.quickFixedFlagged).length,
     deepFalsePositives: rows.filter((row) => row.deepFixedFlagged).length,
-    newlyDetected: rows.filter((row) => !row.quickVulnerable && row.deepVulnerable).map((row) => row.case),
+    ...(quick ? {
+      quickDetected: rows.filter((row) => row.quickVulnerable).length,
+      quickFalsePositives: rows.filter((row) => row.quickFixedFlagged).length,
+      newlyDetected: rows.filter((row) => !row.quickVulnerable && row.deepVulnerable).map((row) => row.case),
+    } : {}),
   }, null, 2));
   assert.ok(rows.every((row) => row.deepVulnerable && !row.deepFixedFlagged), 'Deep mode must distinguish every fixture pair.');
   for (const item of frameworkConfigCases) {

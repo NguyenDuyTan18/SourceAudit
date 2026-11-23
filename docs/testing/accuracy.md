@@ -58,7 +58,7 @@ A labeled OWASP case counts as detected when a finding in its file matches its C
 | After hash, temporary file and TLS checks | 184/452 | 27/778 |
 | November 21 verified release | 283/452 | 27/778 |
 
-The first Python AST precision pass lowered FPR from 8.23% to 3.47% and increased precision from 51.52% to 71.58%, with recall at 15.04%. The change verified selected constants, path guards, XPath literal handling and redirect allowlists. The LDAP expansion detected 9 of 16 vulnerable LDAP cases with zero false positives in 13 safe cases in that category. [Python precision checks](../RULES.md#python-precision-checks)
+The first Python AST precision pass lowered FPR from 8.23% to 3.47% and increased precision from 51.52% to 71.58%, with recall at 15.04%. The change verified selected constants, path guards, XPath literal handling and redirect allowlists. The LDAP expansion detected 9 of 16 vulnerable LDAP cases with zero false positives in 13 safe cases in that category. [Python precision checks](../semgrep-rules.md#python-precision-checks)
 
 The Quick Scan AST and context filters reduced the earlier internal fixture false positives from nine to one. On the Python reference projects at that stage, warnings fell from 0.687 to 0.25 per KLOC. Benchmark fixtures are designed to exercise particular rules and should be read alongside the independent OWASP suites.
 

@@ -60,10 +60,26 @@
 #view-scan .overview-panel { justify-content: flex-start; background: #151f2c; }
 #view-scan .overview-panel .eyebrow { margin: 0 0 8px; font-size: 10px; color: #a6c6cd; }
 #view-scan .overview-panel h2 { max-width: none; font-size: 21px; }
-.scan-modes { margin: 13px 0 17px; width: 100%; display: grid; gap: 8px; }
-.scan-modes > div { padding: 10px 12px; background: #101925; border: 1px solid #29374b; border-radius: 8px; }
-.scan-modes dt { color: #edf2fa; font-size: 12px; font-weight: 600; }
-.scan-modes dd { margin: 3px 0 0; color: #b0bfd3; font-size: 11px; line-height: 1.5; }
+.scan-engines{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:0 0 18px}
+.scan-engine{display:grid;gap:2px;text-align:left;border:1px solid var(--border);background:var(--panel);border-radius:11px;padding:12px 16px}
+.scan-engine strong{font-size:14px}.scan-engine small{font-size:11px;color:var(--muted)}
+.scan-engine[aria-pressed=true]{border-color:var(--mint);background:#142c2a;color:var(--mint)}
+.report-sheet{--border:#dbe5ee;--mint:#116a70;--panel:#f8fafc;--muted:#4e6277;color-scheme:light;background:#fff;color:#172b40;border:1px solid var(--border);border-radius:18px;padding:clamp(13px,2.5vw,26px)}
+.report-heading{background:linear-gradient(145deg,#edf5f8,#f7fafc);border:1px solid var(--border);border-radius:13px;padding:clamp(13px,2vw,20px)}
+.report-heading h2{font-size:clamp(19px,2.7vw,27px)}.report-heading .report-mode{color:#11636d;font-size:12px;font-weight:750;margin:0 0 4px}.report-heading p{color:#435a70;font-size:12px}
+.report-sheet .count-badge{color:#145760;background:#dceff1}.report-sheet .report-actions .button{color:#263f53;background:#fff}.report-sheet .report-actions .button:hover:enabled{background:#e3f1f5;color:#0b4853}
+.report-sheet .critical{--color:#a71943;--tint:#fff0f4}.report-sheet .high{--color:#a53512;--tint:#fff1e9}.report-sheet .medium{--color:#855407;--tint:#fff5de}.report-sheet .low{--color:#135b9a;--tint:#edf6ff}.report-sheet .info{--color:#5c4186;--tint:#f4f0fb}
+.report-sheet .stat{background:var(--tint);color:var(--color)}.report-sheet .stat span{color:inherit;font-size:11px}.report-sheet .results-panel{background:#fff}
+.report-sheet .results-toolbar input,.report-sheet .results-toolbar select{background:#f2f6fa!important;color:#233c52;border-color:#d2dee8;font-size:12px!important}
+.report-sheet .results-toolbar input::placeholder{color:#54687d}.report-sheet .empty-icon{background:#eef4f8;border-color:#dbe5ee;color:#526b81}.report-sheet .empty-state h3,.report-sheet .rule-id,.report-sheet .result-footnote{color:#4e6277}
+.report-sheet .message{background:#eef7f7;color:#27485a;border-color:#dbe5ee}.report-sheet .message.error{background:#fff2f3;color:#8b2335;border-color:#f1c2c9}
+.report-sheet .finding-list{display:grid;align-content:start;gap:8px;padding:10px;background:#f6f9fc}.report-sheet .finding-row{background:#fff;border:1px solid #dbe5ee;border-radius:9px;color:#233c52;padding:12px}
+.report-sheet .finding-row:is(:hover,.selected){background:var(--tint);border-color:var(--color);box-shadow:none}.report-sheet .finding-row h3{font-size:12px}.report-sheet .finding-row p{color:#4e6277;font-size:10px}
+.report-sheet .finding-detail h3{line-height:1.35}.report-sheet .detail-meta,.report-sheet .detail-field h4{color:#52657a}.report-sheet .detail-field :is(p,li){color:#263f53}.report-sheet .detail-field pre,.occurrence pre{background:#edf4f8;color:#17374e;border:1px solid #d9e4ed;border-radius:6px}
+.issue-locations{margin-top:16px}.issue-locations h4{margin:0 0 7px;font-size:13px}.occurrence-list{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.occurrence{min-width:0}.occurrence-location{font-size:11px;font-weight:650;overflow-wrap:anywhere}.occurrence pre{padding:8px 10px;margin:3px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px}.occurrence summary{margin-top:5px;color:#11636d;font-size:11px;cursor:pointer}
+.report-details{margin:12px 0}.report-details summary{color:#11636d;font-size:12px;font-weight:650;cursor:pointer}.report-details .message{margin:8px 0 0}
+@media(max-width:600px){.scan-engines{gap:8px}.scan-engine{padding:9px 11px}.scan-engine strong{font-size:12px}.report-sheet .stat span{font-size:9px}.report-sheet .report-actions{margin-left:0}.report-sheet .results-toolbar{flex-wrap:wrap}.report-sheet .results-toolbar input{max-width:none}.report-sheet .results-toolbar select{max-width:none}}
 #view-scan .overview-stats strong { color: var(--mint); font-size: clamp(18px, 2vw, 25px); }
 #view-scan .overview-stats span { font-size: 10px; }
 #view-scan .results-panel { border-radius: 13px; }

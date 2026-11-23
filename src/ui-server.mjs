@@ -472,6 +472,9 @@ export function createUiServer({
       if (request.method === 'GET' && route === '/scan-scope.js') {
         return send(200, await readFile(new URL('./scan-scope.mjs', import.meta.url)), 'text/javascript; charset=utf-8');
       }
+      if (request.method === 'GET' && route === '/report-findings.js') {
+        return send(200, await readFile(new URL('./report-findings.mjs', import.meta.url)), 'text/javascript; charset=utf-8');
+      }
       if (request.method === 'GET' && ['/', '/app.js', '/style.css'].includes(route)) {
         const file = route === '/' ? 'index.html' : route.slice(1);
         const body = (await readFile(path.join(WEB, file), 'utf8'))

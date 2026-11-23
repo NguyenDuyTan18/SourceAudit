@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { redactedSourceLines, sourceExcerptAt } from './source-excerpt.mjs';
+import { matchedOperationAt, redactedSourceLines, sourceExcerptAt } from './source-excerpt.mjs';
 import { reviewPythonFindings } from './python-precision.mjs';
 import { isDockerfileName } from './scan-scope.mjs';
 
@@ -273,15 +273,21 @@ function normalize(output, workspace, staged) {
     const id = JSON.stringify([result.check_id, file, line, column]);
     if (seen.has(id)) continue;
     seen.add(id);
-    if (!excerpts.has(stagedPath)) excerpts.set(stagedPath, redactedSourceLines(file, text));
+    if (!excerpts.has(stagedPath)) excerpts.set(stagedPath, {
+      redacted: redactedSourceLines(file, text),
+      original: text.length <= 256 * 1024 ? text.split(/\r?\n/) : undefined,
+    });
     const lastMarkedLine = multiline ? endLine - (endColumn === 1 ? 1 : 0) : line;
-    const sourceExcerpt = sourceExcerptAt(excerpts.get(stagedPath), line, lastMarkedLine);
+    const { redacted, original } = excerpts.get(stagedPath);
+    const sourceExcerpt = sourceExcerptAt(redacted, line, lastMarkedLine);
+    const matchedOperation = sourceExcerpt ? undefined : matchedOperationAt(original, line, column);
     const { condition, ...details } = rule;
     const structural = Boolean(rule.evidence);
     findings.push({
       ...details, ruleId: result.check_id, confidence: 'medium', status: rule.status ?? 'needs-review',
       location: { file, line, column, ...(multiline ? { endLine, endColumn } : {}) },
       ...(sourceExcerpt ? { sourceExcerpt } : {}),
+      ...(matchedOperation ? { matchedOperation } : {}),
       evidence: rule.evidence ?? 'Semgrep traced request data to a sensitive argument. Open the location to review the original code.',
       impact: rule.impact ?? 'The impact depends on input validation and runtime context.',
       reference: rule.reference ?? 'https://cwe.mitre.org/data/definitions/' + rule.cwe.slice(4) + '.html',

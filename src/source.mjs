@@ -6,7 +6,6 @@ import { SCENARIO_RULES } from './scenario-rules.mjs';
 import { analyzeFlow, FLOW_RULES } from './flow.mjs';
 import { extractDependencies, dependencyFindings, isDependencyManifest } from './dependencies.mjs';
 import { corpusStats } from './corpus.mjs';
-import { runSemgrep, semgrepLanguage, SEMGREP_RULE_COUNT } from './semgrep.mjs';
 import { isIgnored, parseGitignore } from './gitignore.mjs';
 import { applySuppressions, assignFingerprints, collectSuppressions } from './triage.mjs';
 import { pathKey } from './git-diff.mjs';
@@ -99,6 +98,7 @@ export async function scanSource(input, options = {}) {
   const analysis = options.analysis ?? 'quick';
   if (!['quick', 'deep'].includes(analysis)) throw new Error('Invalid source scan mode.');
   const deep = analysis === 'deep';
+  const semgrep = deep ? await import('./semgrep.mjs') : undefined;
   const root = path.resolve(input);
   const rootStat = await lstat(root);
   if (rootStat.isSymbolicLink() || (!rootStat.isFile() && !rootStat.isDirectory())) throw new Error('The target must be a normal file/ directory, not a symlink.');
@@ -124,7 +124,7 @@ export async function scanSource(input, options = {}) {
   let deepBytes = 0;
   if (deep) {
     if (customRules.length) throw new Error('Custom JSON rules are available in Quick Scan.');
-    report.stats.ruleCount = SEMGREP_RULE_COUNT;
+    report.stats.ruleCount = semgrep.SEMGREP_RULE_COUNT;
     report.limitations[1] = 'Semgrep CE traces data within functions and matches source and configuration patterns. Review each location in context.';
   }
   if (useGitignore) report.stats.gitignore = { applied: true, ignored: 0 };
@@ -166,7 +166,7 @@ export async function scanSource(input, options = {}) {
     }
     const ext = path.extname(absolute).toLowerCase();
     const name = path.basename(absolute);
-    const language = deep ? semgrepLanguage(absolute.split(path.sep).join('/')) : undefined;
+    const language = semgrep?.semgrepLanguage(absolute.split(path.sep).join('/'));
     const manifest = isDependencyManifest(name);
     const supported = deep ? language || manifest : isSupportedSourceFile(absolute);
     if (!supported) { report.stats.filesSkipped++; return; }
@@ -304,7 +304,7 @@ export async function scanSource(input, options = {}) {
   await visit(root);
   if (deep) {
     const result = sources.length
-      ? await (options.semgrepRunner ?? runSemgrep)(sources)
+      ? await (options.semgrepRunner ?? semgrep.runSemgrep)(sources, { workspaceDirectory: options.engineWorkspace })
       : { status: 'skipped', scanned: 0, findings: [] };
     if (result.status === 'complete' && result.scanned === sources.length) {
       for (const { file } of sources) codeFiles.add(file);

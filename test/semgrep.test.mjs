@@ -67,6 +67,17 @@ test('Semgrep findings in other languages preserve location without exporting so
   assert.equal(result.findings[0].sourceExcerpt, undefined);
 });
 
+test('Semgrep preserves a recognized API call name while masking arguments outside JS and TS', async () => {
+  const result = await runSemgrep([{ file: 'src/route.py', text: 'cursor.execute(\n    SQL_EXAMPLE_VALUE\n)\n' }], {
+    run: async () => ({ stdout: JSON.stringify({
+      results: [{ check_id: 'srcaudit-python-sql-injection', path: 'targets/1.py', start: { line: 2, col: 5 } }],
+      errors: [], paths: { scanned: ['targets/1.py'] },
+    }) }),
+  });
+  assert.equal(result.findings[0].matchedOperation, 'execute(…)');
+  assert.doesNotMatch(JSON.stringify(result.findings), /SQL_EXAMPLE_VALUE/);
+});
+
 test('Semgrep stages configuration using synthetic paths and reports structural matches against original files', async () => {
   const workflow = 'repo/.github/workflows/check.yml';
   const result = await runSemgrep([

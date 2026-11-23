@@ -16,7 +16,7 @@ cd SourceAudit
 docker compose up --build -d
 ```
 
-Open [http://127.0.0.1:8787](http://127.0.0.1:8787). Choose **Upload ZIP** or **Upload folder**, select **Quick scan** or **Deep scan with Semgrep**, and select **Start scan**. Try the bundled `examples/demo-src` directory. The browser sends the selected source to the local container. Initial image builds download dependencies. Scans use bundled rules and advisory snapshots.
+Open [http://127.0.0.1:8787](http://127.0.0.1:8787). Open the **Quick Scan** or **Deep Scan with Semgrep** workspace, choose **Upload ZIP** or **Upload folder**, and start the scan. Try the bundled `examples/demo-src` directory. The browser sends the selected source to the local container. Initial image builds download dependencies. Scans use bundled rules and advisory snapshots.
 
 The Compose service publishes on the host loopback address. It starts without registration or sign-in. Reports, scan history and imported write-up indexes persist in the `srcaudit-data` volume when you stop or recreate the container.
 
@@ -94,6 +94,8 @@ Native starts in local mode. An existing owner can continue using their previous
 
 Run `node scan.mjs --list-rules` to see the current Quick Scan rule IDs, CWE mappings and severities. Source findings require review in context. Dependency findings report a version match, with deployment and usage left for review. [Rule coverage and supported lockfiles](docs/RULES.md#quick-scan) · [Data and licenses](data/README.md) · [Sources](SOURCES.md)
 
+Semgrep rule development has its own fixtures and validation command. Run `npm run benchmark:semgrep` to validate Semgrep without running Quick Scan. [Semgrep rule development](docs/semgrep-rules.md)
+
 ## CLI and CI
 
 ```sh
@@ -131,6 +133,8 @@ A baseline marks a previously reported finding as fixed only when the same mode 
 ## Reports, data and limits
 
 Each scan writes HTML, JSON, text and SARIF. Findings show the rule and CWE, location, evidence, impact and remediation. A dependency advisory match identifies an affected version. Review deployment and reachability to assess applicability. Review source excerpts and paths before sharing reports.
+
+The web, HTML and text reports group repeated matches under one issue per rule. All distinct locations stay visible with the flagged code or redacted evidence. Dependency issues are grouped by advisory and package version, and show the manifest line or entry when available. JSON and SARIF retain individual findings for CI and baseline comparison. The standalone HTML report is formatted for A4 printing.
 
 | Setting | Default |
 | --- | --- |

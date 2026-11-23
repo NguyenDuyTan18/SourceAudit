@@ -16,7 +16,7 @@ cd SourceAudit
 docker compose up --build -d
 ```
 
-Mở [http://127.0.0.1:8787](http://127.0.0.1:8787). Trên giao diện tiếng Anh, chọn **Upload ZIP** hoặc **Upload folder**, chọn **Quick scan** hoặc **Deep scan with Semgrep**, rồi bấm **Start scan**. Bạn có thể thử với thư mục `examples/demo-src`. Trình duyệt gửi mã đã chọn đến container trên máy. Lần dựng image đầu tiên cần tải các gói phụ thuộc. Lượt quét dùng bộ quy tắc và dữ liệu cảnh báo đã đóng gói.
+Mở [http://127.0.0.1:8787](http://127.0.0.1:8787). Chọn khu vực **Quick Scan** hoặc **Deep Scan with Semgrep**, chọn **Upload ZIP** hoặc **Upload folder**, rồi bắt đầu quét. Bạn có thể thử với thư mục `examples/demo-src`. Trình duyệt gửi mã đã chọn đến container trên máy. Lần dựng image đầu tiên cần tải các gói phụ thuộc. Lượt quét dùng bộ quy tắc và dữ liệu cảnh báo đã đóng gói.
 
 Dịch vụ chỉ mở trên địa chỉ loopback của máy và chạy không cần tài khoản. Volume `srcaudit-data` giữ báo cáo, lịch sử quét và chỉ mục ghi chú đã nhập sau khi dừng hoặc tạo lại container.
 
@@ -94,6 +94,8 @@ SrcAudit tìm Semgrep theo thứ tự: biến `SECURITYSCANNER_SEMGREP_EXE`, đ�
 
 Chạy `node scan.mjs --list-rules` để xem mã quy tắc Quick Scan, mã CWE và mức độ mặc định. Hãy rà lại phát hiện trong ngữ cảnh sử dụng và triển khai thực tế. [Danh mục quy tắc và tệp khóa được hỗ trợ](docs/RULES.md#quick-scan) · [Dữ liệu và giấy phép](data/README.md) · [Nguồn tham khảo](SOURCES.md)
 
+Bộ quy tắc Semgrep có hướng dẫn phát triển và kiểm thử riêng. Lệnh `npm run benchmark:semgrep` chỉ chạy Semgrep. [Phát triển quy tắc Semgrep](docs/semgrep-rules.md)
+
 ## CLI và CI
 
 ```sh
@@ -131,6 +133,8 @@ Khi so sánh với báo cáo mốc, SrcAudit chỉ ghi nhận một phát hiện
 ## Báo cáo, dữ liệu và giới hạn
 
 Mỗi lượt quét tạo báo cáo HTML, JSON, văn bản và SARIF. Mỗi phát hiện ghi quy tắc, mã CWE, vị trí, bằng chứng, tác động và hướng khắc phục. Khi một thư viện khớp cảnh báo bảo mật, hãy kiểm tra cách triển khai và khả năng luồng thực thi đi qua mã bị ảnh hưởng. Xem lại các đoạn mã và đường dẫn trước khi chia sẻ báo cáo.
+
+Giao diện web, HTML và báo cáo văn bản gộp các lần khớp cùng quy tắc vào một mục. Mỗi mục liệt kê mọi vị trí khác nhau và đoạn mã hoặc bằng chứng đã che dữ liệu nhạy cảm. Cảnh báo thư viện được gộp theo advisory và phiên bản gói, kèm dòng hoặc mục trong tệp khai báo. JSON và SARIF giữ từng phát hiện để dùng trong CI và so sánh báo cáo mốc. Báo cáo HTML có bố cục in A4.
 
 | Thiết lập | Mặc định |
 | --- | --- |

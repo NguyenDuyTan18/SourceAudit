@@ -41,6 +41,10 @@
         </div>
         <span id="scan-readiness" class="scan-readiness" role="status">Connecting…</span>
       </div>
+      <div class="scan-engines" role="group" aria-label="Scan workspace">
+        <button class="scan-engine" type="button" data-scan-mode="quick" aria-pressed="true" disabled><strong>Quick Scan</strong><small>Built-in source and configuration checks</small></button>
+        <button class="scan-engine" type="button" data-scan-mode="deep" aria-pressed="false" disabled><strong>Deep Scan with Semgrep</strong><small>Semgrep rules and data-flow analysis</small></button>
+      </div>
       <div class="scan-grid">
         <section class="panel scan-panel" aria-labelledby="scan-title">
           <div class="panel-title"><h2 id="scan-title">New scan</h2><span class="step">SOURCE CODE</span></div>
@@ -64,32 +68,20 @@
               <p id="source-selection" class="field-help" role="status">No ZIP file selected.</p>
               <p id="zip-limits" class="field-help"></p>
             </fieldset>
-            <fieldset id="source-analysis-options" class="analysis-options" disabled>
-              <legend>Source analysis</legend>
-              <label for="source-analysis">Scan mode</label>
-              <select id="source-analysis" aria-describedby="source-analysis-help">
-                <option value="quick">Quick scan</option>
-                <option value="deep">Deep scan with Semgrep</option>
-              </select>
-              <p id="source-analysis-help" class="field-help">Check source patterns, configuration and dependency versions.</p>
-            </fieldset>
-            <div class="form-bottom"><span class="subtle" id="scan-scope">Static analysis · Local processing</span><button id="scan-button" class="button primary" type="submit" disabled><span id="scan-action">Start scan</span> <span aria-hidden="true">→</span></button></div>
+            <div class="form-bottom"><span class="subtle" id="scan-scope">Static analysis · Local processing</span><button id="scan-button" class="button primary" type="submit" disabled><span id="scan-action">Start Quick Scan</span> <span aria-hidden="true">→</span></button></div>
           </form>
           <div id="scan-progress" class="progress-bar" role="status" hidden><span class="spinner" aria-hidden="true"></span><div><strong id="scan-stage">Preparing the scan…</strong><p>Results appear below.</p></div></div>
         </section>
         <aside class="panel overview-panel">
           <p class="eyebrow">SCAN COVERAGE</p>
-          <h2>Choose a scan mode</h2>
-          <dl class="scan-modes">
-            <div><dt>Quick scan</dt><dd>Checks source, configuration and dependency versions.</dd></div>
-            <div><dt>Deep scan</dt><dd>Semgrep traces data from inputs to sensitive operations.</dd></div>
-          </dl>
-          <div class="overview-stats"><div><strong id="rule-count">—</strong><span>quick-scan rules</span></div><div><strong id="topic-count">—</strong><span>knowledge entries</span></div><div><strong>4</strong><span>report formats</span></div></div>
+          <h2 id="engine-title">Quick Scan</h2>
+          <p id="source-analysis-help">Checks source patterns, configuration, credentials and dependency versions.</p>
+          <div class="overview-stats" id="quick-overview"><div><strong id="rule-count">—</strong><span>built-in rules</span></div><div><strong id="topic-count">—</strong><span>knowledge entries</span></div></div>
         </aside>
       </div>
-      <section class="results-section" aria-labelledby="results-title"><div class="section-heading"><div><h2 id="results-title">Scan results <span id="result-total" class="count-badge">0</span></h2><p id="result-target">No scan selected.</p></div><div class="report-actions"><button class="button small" data-download="html" disabled>↓ HTML</button><button class="button small" data-download="json" disabled>↓ JSON</button><button class="button small" data-download="txt" disabled>↓ TXT</button><button class="button small" data-download="sarif" disabled>↓ SARIF</button></div></div>
-        <div id="severity-stats" class="severity-stats" aria-label="Findings by severity"><div class="stat critical"><span><i></i>Critical</span><strong id="count-critical">0</strong></div><div class="stat high"><span><i></i>High</span><strong id="count-high">0</strong></div><div class="stat medium"><span><i></i>Medium</span><strong id="count-medium">0</strong></div><div class="stat low"><span><i></i>Low</span><strong id="count-low">0</strong></div><div class="stat info"><span><i></i>Info</span><strong id="count-info">0</strong></div></div>
-        <div id="report-notice" class="message" role="status" hidden></div>
+      <section class="results-section report-sheet" aria-labelledby="results-title"><div class="section-heading report-heading"><div><p class="report-mode" id="report-mode">Quick Scan</p><h2 id="results-title">Security Scan Report <span id="result-total" class="count-badge">0</span></h2><p id="result-target">No scan selected.</p></div><div class="report-actions"><button class="button small" data-download="html" disabled>↓ HTML</button><button class="button small" data-download="json" disabled>↓ JSON</button><button class="button small" data-download="txt" disabled>↓ TXT</button><button class="button small" data-download="sarif" disabled>↓ SARIF</button></div></div>
+        <div id="severity-stats" class="severity-stats" aria-label="Unique issues by severity"><div class="stat critical"><span><i></i>Critical</span><strong id="count-critical">0</strong></div><div class="stat high"><span><i></i>High</span><strong id="count-high">0</strong></div><div class="stat medium"><span><i></i>Medium</span><strong id="count-medium">0</strong></div><div class="stat low"><span><i></i>Low</span><strong id="count-low">0</strong></div><div class="stat info"><span><i></i>Info</span><strong id="count-info">0</strong></div></div>
+        <details id="report-coverage" class="report-details" hidden><summary>Scan coverage</summary><div id="report-notice" class="message" role="status"></div></details>
         <div class="panel results-panel"><div class="results-toolbar"><input id="finding-search" type="search" aria-label="Search findings" placeholder="Search by title, CWE or location…"><select id="finding-kind" aria-label="Filter findings by type"><option value="all">All types</option><option value="source">Source and configuration</option><option value="dependency">Dependency</option></select><select id="severity-filter" aria-label="Filter by severity"><option value="all">All severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option><option value="info">Info</option></select></div>
           <div id="results-empty" class="empty-state"><span class="empty-icon" aria-hidden="true">⌕</span><h3>No scan results yet.</h3><p>Choose a ZIP file or folder to start a scan.</p></div>
           <div id="finding-workspace" class="finding-workspace" hidden><div id="finding-list" class="finding-list" aria-label="Findings"></div><section id="finding-detail" class="finding-detail" aria-label="Finding details"></section></div>
