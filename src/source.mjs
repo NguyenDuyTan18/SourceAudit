@@ -14,6 +14,7 @@ import { filterWithAst } from './ast-filter.mjs';
 import { applyFileContext, classifySecret } from './context.mjs';
 import { isDockerfileName, isTestPath, MAX_SOURCE_FILE_BYTES, MAX_SOURCE_FILES, MAX_SOURCE_TOTAL_BYTES, MIB } from './scan-scope.mjs';
 import { explicitlyInsecureCookie } from './python-quick.mjs';
+import { QUICK_CONFIG_RULES, scanQuickConfig } from './config-quick.mjs';
 
 const SKIP = new Set(['.git', '.svn', 'node_modules', '.venv', 'venv', '__pycache__', 'vendor', 'dist', 'build', 'coverage', '.next', '.scanner-reports', '.scanner-tools', '.scanner-auth']);
 const CODE_EXT = new Set(['.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx', '.py', '.php', '.java', '.cs', '.go', '.rb', '.html', '.htm', '.vue', '.svelte', '.astro', '.css', '.scss', '.sass', '.less', '.xml', '.svg', '.sql', '.graphql', '.gql', '.razor', '.cshtml', '.ejs', '.hbs', '.erb', '.jsp', '.kt', '.kts', '.rs', '.ex', '.exs', '.erl', '.dart', '.sh', '.ps1']);
@@ -46,7 +47,11 @@ const rules = [
 ];
 
 rules.push(...EXTENDED_RULES, ...SCENARIO_RULES);
-export const SOURCE_RULES = [...rules.map(({ id, title, cwe, severity, condition }) => ({ id, title, cwe: `CWE-${cwe}`, severity, condition })), ...FLOW_RULES];
+export const SOURCE_RULES = [
+  ...rules.map(({ id, title, cwe, severity, condition }) => ({ id, title, cwe: `CWE-${cwe}`, severity, condition })),
+  ...FLOW_RULES,
+  ...QUICK_CONFIG_RULES.map(({ id, title, cwe, severity, condition }) => ({ id, title, cwe, severity, condition })),
+];
 
 function evidence(line, secret) {
   if (secret) return '[REDACTED: Possible credential or private key. Review the original line locally.]';
@@ -210,6 +215,13 @@ export async function scanSource(input, options = {}) {
       return;
     }
     codeFiles.add(relative);
+    try {
+      const configPath = rootStat.isFile() ? absolute.split(path.sep).join('/') : relative;
+      report.findings.push(...scanQuickConfig(text, relative, configPath, maxFindings - report.findings.length));
+    } catch {
+      report.errors.push(`Could not analyze YAML configuration: ${relative}`);
+      codeFiles.delete(relative);
+    }
     let inBlock = false;
     // Python docstrings / standalone triple-quoted strings are documentation, not code.
     // Only blocks whose first line *starts* with the quotes count, so SQL kept in

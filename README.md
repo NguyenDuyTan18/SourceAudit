@@ -4,6 +4,8 @@
 
 SrcAudit is a local static application security testing tool. It scans source code and dependency lockfiles, then reports locations, redacted evidence and remediation guidance.
 
+[Docker quickstart](#run-with-docker-compose) · [Node.js setup](#run-directly-with-nodejs) · [Scan coverage](#scan-modes) · [CLI and CI](#cli-and-ci) · [Contributing](#verification-and-contributions)
+
 ## Run with Docker Compose
 
 Install Docker with Compose v2. Docker Desktop includes both on Windows, macOS and Linux. The image includes Node.js and Semgrep CE.
@@ -81,10 +83,16 @@ Native starts in local mode. An existing owner can continue using their previous
 
 | Mode | Coverage |
 | --- | --- |
-| **Quick Scan** | Source signatures, local data-flow checks, configuration, credentials and dependency advisories. |
+| **Quick Scan** | Source signatures, short local data flows, credentials, GitHub Actions and Docker Compose configuration, plus dependency advisories. |
 | **Deep Scan** | Bundled Semgrep CE rules for JS/TS, Python, PHP, Java, Go, C#, Ruby, GitHub Actions and Dockerfiles, plus dependency advisories. |
 
-Both modes match resolved npm, PyPI and supported Composer lockfile versions against a local advisory snapshot. The library includes MITRE CWE, OWASP WSTG and ASVS, OWASP API Security, GitHub advisories, CISA KEV, technical references and research. Data provenance and licenses are documented separately. [Rule catalog](docs/RULES.md) · [Data and licenses](data/README.md) · [Sources](SOURCES.md)
+### What Quick Scan checks
+
+- **Source and data flow** includes SQL injection, unsafe HTML output, command execution, outbound requests and file paths. Selected JS/TS findings receive a syntax-tree check, including PostgreSQL query objects that pass fixed SQL and bound values separately.
+- **Credentials and configuration** includes likely embedded secrets, TLS settings, broad GitHub Actions token permissions and Docker Compose services that disable seccomp or AppArmor confinement. Clear secret references are filtered, explicit placeholders appear as informational, and literal fallbacks remain eligible for review.
+- **Dependencies** includes resolved versions from npm, Yarn, pnpm, pinned Python requirements, Pipenv, Poetry and Composer. Both modes match these versions against the bundled advisory snapshot.
+
+Run `node scan.mjs --list-rules` to see the current Quick Scan rule IDs, CWE mappings and severities. Source findings require review in context. Dependency findings report a version match, with deployment and usage left for review. [Rule coverage and supported lockfiles](docs/RULES.md#quick-scan) · [Data and licenses](data/README.md) · [Sources](SOURCES.md)
 
 ## CLI and CI
 

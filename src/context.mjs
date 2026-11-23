@@ -8,20 +8,12 @@ import { isTestPath } from './scan-scope.mjs';
 
 const lower = (severity) => SEVERITIES[Math.min(SEVERITIES.indexOf(severity) + 1, SEVERITIES.length - 1)];
 
-// Values that point to where a secret lives rather than containing it.
-const SECRET_REFERENCE = /^(?:\$\{[^}]+\}|\$\([^)]+\)|\{\{.*\}\}|%\([^)]+\)s|<[^<>]+>|\$[A-Za-z_][A-Za-z0-9_]*|%[A-Za-z_][A-Za-z0-9_]*%)$|\b(?:process\.env|os\.environ|getenv|import\.meta\.env)\b/;
-// Deliberately excludes words like "secret" or "password": "super-secret-123" is a weak
-// but possibly real credential and must stay at full severity.
+// Match complete references only. A reference with a literal fallback may embed a credential.
+const TEMPLATE_REFERENCE = /^(?:\$\{[\w.]+\}|\$\([A-Za-z_]\w*\)|\{\{\s*[\w.]+\s*\}\}|%\([A-Za-z_]\w*\)s|<your[-_ ][\w -]+>|\$[A-Za-z_]\w*|%[A-Za-z_]\w*%)$/i;
+const ENV_REFERENCE = /^(?:(?:process\.env|import\.meta\.env)\.[A-Za-z_]\w*|(?:process\.env|import\.meta\.env|os\.environ)\[(["'])[A-Za-z_]\w*\1\]|(?:os\.)?getenv\((["'])[A-Za-z_]\w*\2\))$/;
 const PLACEHOLDER_WORDS = new Set(['example', 'examples', 'sample', 'dummy', 'fake', 'placeholder', 'your', 'todo', 'fixme', 'redacted', 'test', 'testing', 'development', 'dev', 'demo', 'mock']);
-const PLACEHOLDER_PHRASES = ['changeme', 'replaceme', 'yourkey', 'yourapikey', 'yourtoken', 'yoursecret', 'yourpassword', 'insertkeyhere'];
-
-function entropy(value) {
-  const counts = new Map();
-  for (const ch of value) counts.set(ch, (counts.get(ch) ?? 0) + 1);
-  let bits = 0;
-  for (const count of counts.values()) { const p = count / value.length; bits -= p * Math.log2(p); }
-  return bits;
-}
+const TEMPLATE_WORDS = new Set(['a', 'api', 'credential', 'here', 'key', 'not', 'only', 'password', 'please', 'real', 'secret', 'token', 'value']);
+const PLACEHOLDER_PHRASE = /^(?:(?:change|replace)me(?:please|\d+)?|your(?:apikey|key|token|secret|password)(?:here)?|insertkeyhere)$/;
 
 /** Extracts the literal assigned on a credential-looking line, if any. */
 export function secretValue(raw) {
@@ -42,13 +34,14 @@ export function classifySecret(raw) {
   const value = secretValue(raw);
   if (value === undefined) return undefined;
   const trimmed = value.trim();
-  if (SECRET_REFERENCE.test(trimmed)) return 'reference';
+  if (TEMPLATE_REFERENCE.test(trimmed) || ENV_REFERENCE.test(trimmed)) return 'reference';
   // Known provider token shapes are never treated as placeholders by wording alone.
   if (/\b(?:AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{24,}|sk_live_[A-Za-z0-9]{16,}|xox[baprs]-[A-Za-z0-9-]{10,})\b/.test(trimmed)) return undefined;
-  if (/^(.)\1+$/.test(trimmed) || /^[x*.#_-]+$/i.test(trimmed) || entropy(trimmed) < 2) return 'placeholder';
+  if (/^(.)\1+$/.test(trimmed) || /^[x*.#_-]+$/i.test(trimmed)) return 'placeholder';
   const tokens = trimmed.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
-  if (tokens.some((token) => PLACEHOLDER_WORDS.has(token) || /^x{3,}$/.test(token))) return 'placeholder';
-  if (PLACEHOLDER_PHRASES.some((phrase) => tokens.join('').includes(phrase))) return 'placeholder';
+  if (PLACEHOLDER_PHRASE.test(tokens.join(''))) return 'placeholder';
+  if (tokens.some((token) => PLACEHOLDER_WORDS.has(token)) &&
+      tokens.every((token) => PLACEHOLDER_WORDS.has(token) || TEMPLATE_WORDS.has(token))) return 'placeholder';
   return undefined;
 }
 

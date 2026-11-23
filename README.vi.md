@@ -4,6 +4,8 @@
 
 SrcAudit là công cụ phân tích tĩnh bảo mật ứng dụng (SAST) chạy cục bộ. Công cụ quét mã nguồn và tệp khóa thư viện phụ thuộc, sau đó báo cáo vị trí phát hiện, bằng chứng đã che dữ liệu nhạy cảm và hướng khắc phục.
 
+[Khởi động với Docker](#chạy-bằng-docker-compose) · [Cài bằng Node.js](#chạy-trực-tiếp-bằng-nodejs) · [Phạm vi quét](#chế-độ-quét) · [CLI và CI](#cli-và-ci) · [Đóng góp](#kiểm-thử-và-đóng-góp)
+
 ## Chạy bằng Docker Compose
 
 Cài Docker và Compose v2. Docker Desktop cung cấp cả hai trên Windows, macOS và Linux. Image của SrcAudit có sẵn Node.js và Semgrep CE.
@@ -81,10 +83,16 @@ SrcAudit tìm Semgrep theo thứ tự: biến `SECURITYSCANNER_SEMGREP_EXE`, đ�
 
 | Chế độ | Phạm vi |
 | --- | --- |
-| **Quick scan** | Mẫu nhận diện trong mã nguồn, kiểm tra luồng dữ liệu cục bộ, cấu hình, thông tin xác thực và cảnh báo về thư viện phụ thuộc. |
+| **Quick Scan** | Mẫu mã nguồn, luồng dữ liệu cục bộ, thông tin xác thực, cấu hình GitHub Actions và Docker Compose, cùng cảnh báo thư viện phụ thuộc. |
 | **Deep scan with Semgrep** | Quy tắc Semgrep CE cho JS/TS, Python, PHP, Java, Go, C#, Ruby, GitHub Actions và Dockerfile, cùng cảnh báo về thư viện phụ thuộc. |
 
-Cả hai chế độ đối chiếu phiên bản cụ thể trong các tệp khóa npm, PyPI và Composer được hỗ trợ với dữ liệu cảnh báo cục bộ. Thư viện tra cứu gồm MITRE CWE, OWASP WSTG và ASVS, OWASP API Security, GitHub Security Advisories, CISA KEV, tài liệu kỹ thuật và nghiên cứu. [Danh mục quy tắc](docs/RULES.md) · [Dữ liệu và giấy phép](data/README.md) · [Nguồn tham khảo](SOURCES.md)
+### Quick Scan kiểm tra những gì
+
+- **Mã nguồn và luồng dữ liệu** gồm SQL injection, HTML không an toàn, thực thi lệnh, yêu cầu HTTP đi ra và đường dẫn tệp. Một số cảnh báo JS/TS được kiểm tra lại bằng cây cú pháp, bao gồm truy vấn PostgreSQL dùng câu SQL cố định và truyền giá trị qua tham số riêng.
+- **Thông tin xác thực và cấu hình** gồm bí mật có thể bị ghi cứng, thiết lập TLS, quyền token quá rộng trong GitHub Actions và dịch vụ Docker Compose tắt cơ chế bảo vệ seccomp hoặc AppArmor. Tham chiếu bí mật rõ ràng được lọc, giá trị mẫu rõ ràng được đánh dấu thông tin và giá trị dự phòng ghi cứng vẫn được rà soát.
+- **Thư viện phụ thuộc** gồm phiên bản cụ thể từ npm, Yarn, pnpm, tệp requirements có ghim phiên bản, Pipenv, Poetry và Composer. Cả hai chế độ đối chiếu các phiên bản này với dữ liệu cảnh báo đóng gói.
+
+Chạy `node scan.mjs --list-rules` để xem mã quy tắc Quick Scan, mã CWE và mức độ mặc định. Hãy rà lại phát hiện trong ngữ cảnh sử dụng và triển khai thực tế. [Danh mục quy tắc và tệp khóa được hỗ trợ](docs/RULES.md#quick-scan) · [Dữ liệu và giấy phép](data/README.md) · [Nguồn tham khảo](SOURCES.md)
 
 ## CLI và CI
 

@@ -161,6 +161,23 @@ function makeEvaluator({ constants }) {
 }
 
 const SQL_KEYWORD = /\b(?:SELECT|INSERT|UPDATE|DELETE)\b/;
+const QUERY_CONFIG_KEYS = new Set(['text', 'values', 'name', 'rowMode']);
+
+function hasBoundQueryValues(config, isConstant) {
+  const keys = new Set();
+  for (const item of config.properties) {
+    if (item.type !== 'ObjectProperty' || item.computed) return false;
+    const key = item.key.type === 'Identifier' ? item.key.name : item.key.value;
+    if (!QUERY_CONFIG_KEYS.has(key) || keys.has(key)) return false;
+    keys.add(key);
+  }
+  const text = unwrap(property(config, 'text')?.value);
+  const values = unwrap(property(config, 'values')?.value);
+  return text?.type === 'StringLiteral' && /\$[1-9]\d*/.test(text.value) &&
+    values?.type === 'ArrayExpression' &&
+    ['name', 'rowMode'].every((key) => !keys.has(key) || isConstant(property(config, key).value));
+}
+
 const SHELL_DIRECT = new Set(['exec', 'execSync']);
 const SHELL_ARGV = new Set(['execFile', 'execFileSync', 'spawn', 'spawnSync']);
 const HTTP = new Set(['fetch', 'got', 'request', 'get', 'post', 'put', 'patch', 'delete', 'head']);
@@ -235,9 +252,12 @@ function classifySink(ruleId, node, ctx) {
       if ((name === 'write' || name === 'writeln') && objectName(node.callee) === 'document') return safeAll(args, 'html') ? 'safe' : 'unsafe';
       if (name === 'insertAdjacentHTML') return args.length > 1 && isSafe(args[1], 'html') ? 'safe' : 'unsafe';
       return undefined;
-    case 'SQL':
+    case 'SQL': {
+      const first = unwrap(args[0]);
+      if (name === 'query' && first?.type === 'ObjectExpression') return hasBoundQueryValues(first, ctx.isConstant) ? 'safe' : 'unsafe';
       if (['query', 'execute', 'raw', 'exec', '$queryRawUnsafe', '$executeRawUnsafe'].includes(name)) return args.length && isSafe(args[0], 'sql') ? 'safe' : 'unsafe';
       return undefined;
+    }
     default: return undefined;
   }
 }
@@ -295,7 +315,7 @@ export function filterWithAst(findings, sourceByFile) {
         if (verdict) verdicts.push(verdict);
       }
       if (finding.ruleId.endsWith('-SQL')) for (const builder of sqlStringBuilders(nodes)) verdicts.push(ctx.isSafe(builder, 'sql') ? 'safe' : 'unsafe');
-      if (verdicts.length && verdicts.every((v) => v === 'safe')) drop.set(finding, 'AST: All relevant calls on this line use constants, sanitized data or a process API that does not invoke a shell.');
+      if (verdicts.length && verdicts.every((v) => v === 'safe')) drop.set(finding, 'AST: All relevant expressions on this line use constants, sanitized data, bound SQL values or a process API without a shell.');
     }
   }
   const removed = [];

@@ -171,7 +171,7 @@ function renderDetail(finding) {
   const meta = element('div', 'detail-meta');
   meta.append(element('span', 'rule-id', `${finding.ruleId} · ${finding.cwe}`), element('span', '', `Confidence: ${names[finding.confidence] || finding.confidence}`), element('span', '', finding.status === 'observed' ? 'Observed configuration' : finding.status === 'version-match' ? 'Matches an advisory version range' : 'Needs review'));
   const method = finding.advisory ? 'Dependency version matching' : {
-    signature: 'Pattern matching', 'text-flow': 'Local data-flow tracking',
+    signature: 'Pattern matching', 'text-flow': 'Local data-flow tracking', 'yaml-structure': 'YAML configuration check',
     'semgrep-pattern': 'Semgrep structural matching', 'semgrep-taint': 'Semgrep data-flow analysis',
   }[finding.detection?.method];
   if (method) meta.append(element('span', '', method));

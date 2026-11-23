@@ -23,6 +23,8 @@
     "@renovatebot/pep440": "^6.0.0",
     "fast-xml-parser": "^5.12.0",
     "fflate": "^0.8.3",
-    "semver": "^7.8.6"
+    "semver": "^7.8.6",
+    "smol-toml": "^1.9.1",
+    "yaml": "^2.9.1"
   }
 }

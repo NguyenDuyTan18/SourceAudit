@@ -1,5 +1,6 @@
 import semver from 'semver';
 import * as pep440 from '@renovatebot/pep440';
+import { parse as parseToml } from 'smol-toml';
 import { CORPUS, knownExploited } from './corpus.mjs';
 
 const normalize = (ecosystem, name) => ecosystem === 'pip' ? name.toLowerCase().replace(/[-_.]+/g, '-') : name.toLowerCase();
@@ -151,6 +152,16 @@ export function extractDependencies(filename, text) {
     for (const group of ['default', 'develop']) for (const [name, entry] of Object.entries(data[group] || {})) {
       if (entry.markers || !entry.version?.startsWith('==')) result.unresolved++;
       else add('pip', name, entry.version.slice(2), '/' + group + '/' + name);
+    }
+  } else if (filename === 'poetry.lock') {
+    const data = parseToml(text);
+    if (!/^[12]\.\d+$/.test(data.metadata?.['lock-version'] ?? '') || !Array.isArray(data.package)) {
+      result.unsupported = 1;
+      return result;
+    }
+    for (const [index, entry] of data.package.entries()) {
+      if (entry?.source !== undefined || typeof entry?.name !== 'string' || !/^[a-z\d](?:[a-z\d._-]*[a-z\d])?$/i.test(entry.name)) result.unresolved++;
+      else add('pip', entry.name, entry.version, `/package/${index}/version`);
     }
   } else if (filename === 'package.json') {
     const data = JSON.parse(text);

@@ -45,6 +45,9 @@ test('Quick Scan checks workflow permissions and container confinement in the re
   ]);
   const single = await scanSource(path.join(root, '.github/workflows/ci.yml'));
   assert.equal(single.findings.filter(({ ruleId }) => ruleId === ids[0]).length, 2);
+  await writeFile(path.join(root, 'compose.override.yaml'), 'services: [');
+  const malformed = await scanSource(path.join(root, 'compose.override.yaml'));
+  assert.ok(malformed.errors.some((message) => message.includes('Could not analyze YAML configuration')));
 });
 
 test('Quick Scan keeps dynamic SQL text and accepts fixed text with separate query values', async (t) => {
@@ -70,6 +73,8 @@ test('secret triage removes clear references and keeps literal fallback values f
   assert.equal(classifySecret('PASSWORD = "literal-process.env.VALUE"'), undefined);
   assert.equal(classifySecret('PASSWORD = "<local-value>"'), undefined);
   assert.equal(classifySecret('PASSWORD = "<your-password-here>"'), 'reference');
+  assert.equal(classifySecret('PASSWORD = "os.getenv(\'DB_PASSWORD\')"'), 'reference');
+  assert.equal(classifySecret('PASSWORD = "os.getenv(\'DB_PASSWORD\', \'local-value\')"'), undefined);
   assert.equal(classifySecret('PASSWORD = "your-password-here"'), 'placeholder');
   assert.equal(classifySecret('PASSWORD = "dev-R8q7Vn29"'), undefined);
 });
