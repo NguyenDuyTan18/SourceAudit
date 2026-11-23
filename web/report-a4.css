@@ -1,0 +1,33 @@
+.a4-standalone{margin:0;padding:24px 12px;background:#eef2f6;color:#1e293b;font:14px/1.45 Inter,"Segoe UI",sans-serif}
+.a4-sheet,.a4-sheet *{box-sizing:border-box}
+.a4-sheet{width:min(100%,210mm);min-height:280mm;margin:auto;padding:13.5mm 15.5mm;display:flex;flex-direction:column;gap:14px;background:#fff;color:#1e293b;border-radius:24px;box-shadow:0 20px 50px #0f172a20;font:12px/1.45 Inter,"Segoe UI",sans-serif;overflow-wrap:anywhere}
+.a4-sheet :is(h1,h2,h3,p,ul){margin:0}.a4-sheet ul{padding:0;list-style:none}.a4-sheet code{font:10px/1.4 "JetBrains Mono",Consolas,monospace}
+.a4-banner{display:grid;grid-template-columns:minmax(0,1fr) 154px;gap:14px;align-items:center;padding:17px;background:linear-gradient(140deg,#f8fafc,#fff 54%,#ecfdf5);border:1px solid #e2e8f0;border-radius:18px}
+.a4-brand{display:flex;align-items:center;gap:9px}.a4-brand>span{display:grid;place-items:center;flex:0 0 34px;height:34px;border-radius:11px;background:linear-gradient(145deg,#10b981,#087954);color:white;font-size:18px;font-weight:800}
+.a4-brand h1{font-size:21px;line-height:1.2;letter-spacing:-.025em;color:#0f172a}.a4-brand p{margin-top:3px;font-size:11px;color:#526276}
+.a4-meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px}.a4-meta span{padding:3px 7px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;font-size:10px;color:#475569}.a4-meta strong{color:#1e293b}
+.a4-status{background:#fff;border:1px solid #dcece3;border-radius:12px;padding:9px 12px;display:grid;gap:3px}.a4-status span{font-size:9px;color:#475569;text-transform:uppercase;letter-spacing:.06em}.a4-status strong{color:#087954}.a4-status small{color:#526276}.a4-status.a4-partial strong{color:#92400e}
+.a4-sheet .critical{--a4-ink:#a81240;--a4-border:#fecdd3;--a4-fill:#fff1f2}.a4-sheet .high{--a4-ink:#9a3412;--a4-border:#fed7aa;--a4-fill:#fff7ed}.a4-sheet .medium{--a4-ink:#854d0e;--a4-border:#fde68a;--a4-fill:#fffbeb}.a4-sheet :is(.low,.info){--a4-ink:#075985;--a4-border:#bae6fd;--a4-fill:#f0f9ff}
+.a4-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.a4-stats>div{position:relative;padding:10px 12px;background:var(--a4-fill);border:1px solid var(--a4-border);border-radius:13px;color:var(--a4-ink)}
+.a4-stats strong{display:block;font-size:23px;font-weight:800;line-height:1.05}.a4-stats span{font-size:10px;font-weight:650}.a4-stats i{position:absolute;right:12px;top:13px;width:8px;height:8px;background:currentColor;border-radius:50%}
+.a4-heading{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:7px}.a4-heading h2,.a4-actions h2{font-size:13px;line-height:1.3;color:#1e293b}.a4-heading>span,.a4-muted,.a4-remainder{font-size:10px;color:#526276}
+.a4-issues{display:grid;gap:7px}.a4-issue{padding:8px 11px;border:1px solid var(--a4-border);background:var(--a4-fill);border-radius:12px;break-inside:avoid}.a4-issue-header{display:flex;align-items:center;gap:5px 7px;flex-wrap:wrap}.a4-badge{border:1px solid var(--a4-border);color:var(--a4-ink);background:#fff;border-radius:16px;padding:1px 7px;font-size:9px;font-weight:750}.a4-issue h3{color:#172334;font-size:11.5px}.a4-issue-header code{margin-left:auto;color:#475569}
+.a4-issue p{font-size:10.4px;color:#475569;margin-top:2px}.a4-issue p strong{color:#233447;margin-right:3px}.a4-locations{display:grid;gap:3px;margin:5px 0!important}.a4-locations li{display:flex;align-items:baseline;gap:8px;min-width:0;background:#ffffffc7;padding:2px 6px;border-radius:4px;color:#334155}.a4-locations code{overflow-wrap:anywhere;min-width:0}.a4-locations code:first-child{font-weight:700;flex-shrink:0;max-width:50%}
+.a4-remainder{margin-top:6px!important}.a4-empty{border:1px solid #dbe7ee;background:#f5f9fb;border-radius:10px;padding:16px}
+.a4-actions{margin-top:auto}.a4-actions>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:6px}.a4-actions p{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:8px 10px;font-size:10px;color:#475569}.a4-actions strong{display:block;color:#1e293b;margin-bottom:1px}
+.a4-footer{display:flex;justify-content:space-between;gap:8px;border-top:1px solid #e2e8f0;padding-top:7px;color:#526276;font-size:9px}.a4-sheet [contenteditable]:hover{outline:1px dashed #8297a9;border-radius:3px}.a4-sheet [contenteditable]:focus{outline:2px solid #0b926b;border-radius:3px;background:#fff}
+@media(max-width:700px){.a4-sheet{min-height:0;padding:clamp(12px,4vw,26px);gap:12px}.a4-banner{grid-template-columns:1fr}.a4-meta{margin-top:8px}.a4-status{grid-template-columns:1fr auto}.a4-status small{grid-column:1/-1}.a4-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.a4-heading{flex-wrap:wrap}.a4-issue-header code{margin-left:0}.a4-locations li{display:grid;gap:0}.a4-locations code:first-child{max-width:none}}
+@media(max-width:420px){.a4-actions>div{grid-template-columns:1fr}.a4-status{display:grid;grid-template-columns:1fr}.a4-brand h1{font-size:18px}}
+@page{size:A4 portrait;margin:0}
+@media print{
+  .a4-standalone,body:has(#view-report:not([hidden])){display:block!important;background:white!important;margin:0!important;padding:0!important}
+  body:has(#view-report:not([hidden])) :is(.sidebar,.topbar,.footer,.a4-toolbar){display:none!important}
+  body:has(#view-report:not([hidden])) :is(main,.page-content,#view-report){display:block!important;max-width:none!important;margin:0!important;padding:0!important;background:white!important}
+  .a4-sheet{display:flex;width:210mm;min-height:294mm;margin:0;padding:10mm 13mm;gap:9px;box-shadow:none;border-radius:0;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+  .a4-banner{padding:12px;grid-template-columns:minmax(0,1fr) 150px}.a4-stats{grid-template-columns:repeat(4,minmax(0,1fr))}.a4-stats>div{padding:7px 9px}
+  .a4-issues{gap:5px}.a4-issue{padding:6px 8px}.a4-issue h3{font-size:10.5px}.a4-issue p{font-size:10px;line-height:1.3}
+  .a4-locations{gap:2px;margin:4px 0!important}.a4-locations li{display:grid;grid-template-columns:minmax(0,41%) minmax(0,1fr);gap:6px;padding:2px 4px}
+  .a4-locations code{font-size:8.8px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.a4-locations code:first-child{max-width:none}
+  .a4-actions>div{grid-template-columns:repeat(3,minmax(0,1fr))}.a4-actions p{padding:6px 8px}
+  .a4-sheet [contenteditable]{outline:0!important}
+}

@@ -136,6 +136,8 @@ Each scan writes HTML, JSON, text and SARIF. Findings show the rule and CWE, loc
 
 The web, HTML and text reports group repeated matches under one issue per rule. All distinct locations stay visible with the flagged code or redacted evidence. Dependency issues are grouped by advisory and package version, and show the manifest line or entry when available. JSON and SARIF retain individual findings for CI and baseline comparison. The standalone HTML report is formatted for A4 printing.
 
+In the web workspace, **HTML · Báo cáo 1 trang** opens a Vietnamese one-page summary. You can edit its title and explanatory text, download the summary as standalone HTML, or print it to PDF. The summary shows up to four issue groups and two locations per group. Use **Báo cáo chi tiết** for all groups and locations.
+
 | Setting | Default |
 | --- | --- |
 | Source selection | 2,000 files and 10 MiB per file |

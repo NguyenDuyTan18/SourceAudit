@@ -1,12 +1,14 @@
 import { isDockerfileName, isTestPath, MAX_SOURCE_FILE_BYTES, MAX_SOURCE_FILES, MAX_SOURCE_TOTAL_BYTES, MAX_ZIP_BYTES, MIB } from '/scan-scope.js';
 import { findingStatement, flowTraceText, groupReportFindings, locationText, reportMode, scanModeLabel, SEVERITIES } from '/report-findings.js';
+import { renderA4Document, renderA4Sheet } from '/report-preview.mjs';
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const token = $('meta[name="session-token"]').content;
 const names = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low', info: 'Info' };
-const state = { mode: 'quick', reports: new Map(), groups: [], selected: null, busy: false, ready: false, knowledgePage: 1, knowledgeRequest: 0, folderFiles: [] };
+const state = { mode: 'quick', reports: new Map(), a4Edits: new Map(), groups: [], selected: null, busy: false, ready: false, knowledgePage: 1, knowledgeRequest: 0, folderFiles: [] };
 const selectedJob = () => state.reports.get(state.mode);
+const reportPrompt = 'Tóm tắt dữ liệu quét mã nguồn đã cung cấp thành báo cáo tiếng Việt một trang A4. Giữ nguyên chế độ quét, phạm vi, mức độ và vị trí tệp:dòng. Gộp các phát hiện cùng quy tắc, trình bày vấn đề ưu tiên cùng ảnh hưởng và hướng xử lý ngắn gọn. Giữ phần mã đã che dữ liệu nhạy cảm và ghi rõ giới hạn phạm vi. Chỉ dùng số liệu có trong báo cáo.';
 const sourceFileCount = MAX_SOURCE_FILES.toLocaleString('en-US');
 $('#zip-limits').textContent = `Up to ${sourceFileCount} source files, ${MAX_SOURCE_FILE_BYTES / MIB} MiB per file, ${MAX_SOURCE_TOTAL_BYTES / MIB} MiB of source in total, and ${MAX_ZIP_BYTES / MIB} MiB per ZIP. Test files are skipped.`;
 const sourceExtensions = new Set();
@@ -66,6 +68,30 @@ function showView(view) {
   });
   if (view === 'history') loadHistory().catch((error) => message(error.message));
   if (view === 'users') loadUsers().catch((error) => message(error.message));
+  if (view === 'report') $('#breadcrumb-current').textContent = 'Báo cáo A4';
+}
+
+function activeDraft() {
+  const job = selectedJob();
+  if (!state.a4Edits.has(job.id)) state.a4Edits.set(job.id, {});
+  return state.a4Edits.get(job.id);
+}
+
+function a4Message(text = '') {
+  const message = $('#a4-message');
+  message.textContent = text;
+  message.hidden = !text;
+}
+
+function download(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const anchor = element('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 function selectMode(mode) {
   state.mode = mode;
@@ -234,6 +260,7 @@ function renderFindings() {
   const report = selectedJob()?.report;
   const search = $('#finding-search').value.toLowerCase().trim();
   const severity = $('#severity-filter').value;
+  $$('[data-report-severity]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.reportSeverity === severity)));
   const kind = $('#finding-kind').value;
   const findings = state.groups.filter(({ finding, occurrences }) => {
     const group = finding.advisory ? 'dependency' : 'source';
@@ -278,6 +305,8 @@ function renderReport() {
   const occurrences = state.groups.reduce((total, group) => total + group.occurrences.length, 0);
   $('#result-target').textContent = report ? `${report.target} · ${state.groups.length} unique issues · ${occurrences} tracked locations` : 'No scan selected.';
   $$('[data-download]').forEach((button) => { button.disabled = !report; });
+  $('#open-a4-report').disabled = !report;
+  $$('[data-report-severity]').forEach((button) => { button.disabled = !report; });
   const notice = $('#report-notice');
   const coverage = $('#report-coverage');
   coverage.hidden = !report;
@@ -400,6 +429,7 @@ async function loadHistory() {
         try {
           await api('/api/jobs/' + entry.id + '/delete', {});
           for (const [mode, job] of state.reports) if (job.id === entry.id) state.reports.delete(mode);
+          state.a4Edits.delete(entry.id);
           if (!selectedJob()) { state.selected = null; renderReport(); }
           await loadHistory();
         } catch (error) { message(error.message); remove.disabled = false; }
@@ -451,6 +481,64 @@ $('#scan-form').addEventListener('submit', (event) => { event.preventDefault(); 
 $('#finding-search').addEventListener('input', renderFindings);
 $('#severity-filter').addEventListener('change', renderFindings);
 $('#finding-kind').addEventListener('change', renderFindings);
+for (const button of $$('[data-report-severity]')) button.addEventListener('click', () => {
+  const filter = $('#severity-filter');
+  filter.value = filter.value === button.dataset.reportSeverity ? 'all' : button.dataset.reportSeverity;
+  renderFindings();
+});
+$('#open-a4-report').addEventListener('click', () => {
+  const report = selectedJob()?.report;
+  if (!report) return;
+  $('#a4-preview').innerHTML = renderA4Sheet(report, activeDraft(), true);
+  showView('report');
+  a4Message();
+  $('#back-to-scan').focus();
+});
+$('#back-to-scan').addEventListener('click', () => { showView('scan'); $('#open-a4-report').focus(); });
+$('#a4-preview').addEventListener('beforeinput', (event) => {
+  if (event.target.closest('[data-a4-field]') && ['insertParagraph', 'insertLineBreak'].includes(event.inputType)) event.preventDefault();
+});
+$('#a4-preview').addEventListener('input', (event) => {
+  const editable = event.target.closest('[data-a4-field]');
+  if (!editable) return;
+  const limit = Number(editable.dataset.limit);
+  const text = editable.textContent.replace(/\s+/g, ' ').slice(0, limit);
+  if (text !== editable.textContent) editable.textContent = text;
+  activeDraft()[editable.dataset.a4Field] = text.trim();
+});
+$('#print-a4-report').addEventListener('click', () => {
+  $('#a4-preview').innerHTML = renderA4Sheet(selectedJob().report, activeDraft(), true);
+  window.print();
+});
+$('#download-a4-report').addEventListener('click', async () => {
+  const { report } = selectedJob();
+  const edits = { ...activeDraft() };
+  try {
+    const stylesheet = await fetch('/report-a4.css');
+    if (!stylesheet.ok) throw new Error('Không đọc được định dạng báo cáo.');
+    download(new Blob([renderA4Document(report, await stylesheet.text(), edits)], { type: 'text/html;charset=utf-8' }), 'srcaudit-a4.html');
+    a4Message();
+  } catch (error) { a4Message(error.message); }
+});
+$('#a4-prompt').value = reportPrompt;
+function showReportPrompt() {
+  $('#a4-prompt-status').textContent = '';
+  $('#a4-prompt-dialog').showModal();
+}
+async function copyReportPrompt() {
+  try {
+    await navigator.clipboard.writeText(reportPrompt);
+    if ($('#a4-prompt-dialog').open) $('#a4-prompt-status').textContent = 'Đã sao chép prompt.';
+    else a4Message('Đã sao chép prompt.');
+  } catch {
+    if (!$('#a4-prompt-dialog').open) showReportPrompt();
+    $('#a4-prompt').select();
+    $('#a4-prompt-status').textContent = 'Hãy sao chép phần văn bản đã chọn.';
+  }
+}
+$('#show-report-prompt').addEventListener('click', showReportPrompt);
+$('#copy-report-prompt').addEventListener('click', copyReportPrompt);
+$('#copy-prompt-dialog').addEventListener('click', copyReportPrompt);
 let knowledgeTimer;
 $('#knowledge-search').addEventListener('input', () => { clearTimeout(knowledgeTimer); knowledgeTimer = setTimeout(() => { state.knowledgePage = 1; void renderKnowledge(); }, 250); });
 $('#knowledge-kind').addEventListener('change', () => { state.knowledgePage = 1; void renderKnowledge(); });
@@ -476,8 +564,7 @@ for (const button of $$('[data-download]')) button.addEventListener('click', asy
     const format = button.dataset.download;
     const response = await fetch(`/api/reports/${selectedJob().id}/${format}`, { headers: { 'X-Session-Token': token } });
     if (!response.ok) throw new Error('Could not download the report.');
-    const url = URL.createObjectURL(await response.blob());
-    const anchor = element('a'); anchor.href = url; anchor.download = `security-report.${format}`; document.body.append(anchor); anchor.click(); anchor.remove(); setTimeout(() => URL.revokeObjectURL(url), 30000);
+    download(await response.blob(), `security-report.${format}`);
   } catch (error) { message(error.message); }
 });
 

@@ -472,10 +472,11 @@ export function createUiServer({
       if (request.method === 'GET' && route === '/scan-scope.js') {
         return send(200, await readFile(new URL('./scan-scope.mjs', import.meta.url)), 'text/javascript; charset=utf-8');
       }
-      if (request.method === 'GET' && route === '/report-findings.js') {
-        return send(200, await readFile(new URL('./report-findings.mjs', import.meta.url)), 'text/javascript; charset=utf-8');
+      if (request.method === 'GET' && ['/report-findings.js', '/report-findings.mjs', '/report-preview.mjs'].includes(route)) {
+        const module = route === '/report-preview.mjs' ? './report-preview.mjs' : './report-findings.mjs';
+        return send(200, await readFile(new URL(module, import.meta.url)), 'text/javascript; charset=utf-8');
       }
-      if (request.method === 'GET' && ['/', '/app.js', '/style.css'].includes(route)) {
+      if (request.method === 'GET' && ['/', '/app.js', '/style.css', '/report-a4.css'].includes(route)) {
         const file = route === '/' ? 'index.html' : route.slice(1);
         const body = (await readFile(path.join(WEB, file), 'utf8'))
           .replace('__SESSION_TOKEN__', token).replace('__LOGOUT_VISIBILITY__', signedIn ? '' : 'hidden');

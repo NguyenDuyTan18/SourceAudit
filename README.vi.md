@@ -136,6 +136,8 @@ Mỗi lượt quét tạo báo cáo HTML, JSON, văn bản và SARIF. Mỗi phá
 
 Giao diện web, HTML và báo cáo văn bản gộp các lần khớp cùng quy tắc vào một mục. Mỗi mục liệt kê mọi vị trí khác nhau và đoạn mã hoặc bằng chứng đã che dữ liệu nhạy cảm. Cảnh báo thư viện được gộp theo advisory và phiên bản gói, kèm dòng hoặc mục trong tệp khai báo. JSON và SARIF giữ từng phát hiện để dùng trong CI và so sánh báo cáo mốc. Báo cáo HTML có bố cục in A4.
 
+Chọn **HTML · Báo cáo 1 trang** để xem bản tóm tắt tiếng Việt. Bạn có thể chỉnh tiêu đề và phần diễn giải, tải HTML độc lập hoặc chọn **In / Xuất PDF**. Bản tóm tắt hiển thị tối đa bốn nhóm và hai vị trí mỗi nhóm. Mở **Báo cáo chi tiết** để xem toàn bộ vị trí.
+
 | Thiết lập | Mặc định |
 | --- | --- |
 | Số lượng và dung lượng tệp mã nguồn | 2.000 tệp, tối đa 10 MiB mỗi tệp |
